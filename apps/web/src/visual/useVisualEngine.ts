@@ -24,6 +24,7 @@ import {
 	type ShelfItem,
 	type StageLyricsLifecycle,
 } from "@mineradio/visual-engine";
+import { attachShelfFocusZonePointerWiring, isWallpaperSafeShelfPreset } from "./shelf-focus-zone";
 
 export interface VisualEngineRefs {
 	hostRef: RefObject<HTMLDivElement | null>;
@@ -34,6 +35,8 @@ export interface VisualEngineRefs {
 	shelfItemsRef: RefObject<ShelfItem[]>;
 	shelfItemsVersionRef: RefObject<number>;
 	splashActiveRef: RefObject<boolean>;
+	shelfCameraModeRef?: RefObject<string>;
+	wallpaperSafeRef?: RefObject<boolean>;
 	lifecycleRef: RefObject<StageLyricsLifecycle | null>;
 	coverResolution: number;
 	fxDefaults?: Partial<FxState>;
@@ -55,6 +58,7 @@ interface MountedHandles {
 	offLyrics: () => void;
 	offAudio: () => void;
 	offHomeAudio: () => void;
+	offShelfFocus: () => void;
 }
 
 function prefersReducedMotion(): boolean {
@@ -190,6 +194,10 @@ function disposeHandles(handles: MountedHandles | null): void {
 	}
 	try {
 		handles.offHomeAudio();
+	} catch {
+	}
+	try {
+		handles.offShelfFocus();
 	} catch {
 	}
 	try {
@@ -360,6 +368,16 @@ export function useVisualEngine(refs: VisualEngineRefs): void {
 			const offAudio = audioEngine.subscribeBeat((burst, isScheduled) => {
 				cinema.applyBeat(burst, isScheduled);
 			});
+			const offShelfFocus = attachShelfFocusZonePointerWiring({
+				target: window,
+				cinema,
+				shelfManager,
+				getSplashActive: () => refs.splashActiveRef.current,
+				getShelfCameraMode: () => refs.shelfCameraModeRef?.current ?? refs.fxDefaults?.shelfCameraMode ?? "static",
+				getPortrait: () => window.innerHeight > window.innerWidth,
+				getWallpaperSafe: () => refs.wallpaperSafeRef?.current ?? isWallpaperSafeShelfPreset(refs.fxDefaults?.preset),
+				getViewportHeight: () => window.innerHeight || host.clientHeight || 0,
+			});
 			handles = {
 				renderer,
 				audioEngine,
@@ -376,6 +394,7 @@ export function useVisualEngine(refs: VisualEngineRefs): void {
 				offLyrics,
 				offAudio,
 				offHomeAudio,
+				offShelfFocus,
 			};
 			renderLoop.start();
 		})();
@@ -387,5 +406,5 @@ export function useVisualEngine(refs: VisualEngineRefs): void {
 			handles = null;
 			refs.lifecycleRef.current = null;
 		};
-	}, [refs.hostRef, refs.audioElementRef, refs.positionRef, refs.isPlayingRef, refs.lyricLinesRef, refs.shelfItemsRef, refs.shelfItemsVersionRef, refs.splashActiveRef, refs.lifecycleRef, refs.coverResolution, refs.fxDefaults]);
+	}, [refs.hostRef, refs.audioElementRef, refs.positionRef, refs.isPlayingRef, refs.lyricLinesRef, refs.shelfItemsRef, refs.shelfItemsVersionRef, refs.splashActiveRef, refs.shelfCameraModeRef, refs.wallpaperSafeRef, refs.lifecycleRef, refs.coverResolution]);
 }

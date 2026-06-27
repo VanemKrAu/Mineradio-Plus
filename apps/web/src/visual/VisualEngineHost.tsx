@@ -9,6 +9,7 @@ import {
 import { useVisualEngine } from "./useVisualEngine";
 import { PlayerController } from "../audio/player-controller";
 import { mapQueueToShelfItems } from "./shelf-items";
+import { isWallpaperSafeShelfPreset } from "./shelf-focus-zone";
 
 export interface VisualEngineHostProps {
 	audioElementRef: RefObject<HTMLAudioElement | null>;
@@ -39,11 +40,15 @@ export function VisualEngineHost(props: VisualEngineHostProps): ReactElement {
 	const shelfItemsRef = useRef<ShelfItem[]>([]);
 	const shelfItemsVersionRef = useRef<number>(0);
 	const splashActiveRef = useRef<boolean>(props.splashActive ?? false);
+	const shelfCameraModeRef = useRef<string>(props.fxDefaults?.shelfCameraMode ?? "static");
+	const wallpaperSafeRef = useRef<boolean>(isWallpaperSafeShelfPreset(props.fxDefaults?.preset));
 	const lifecycleRef = useRef<StageLyricsLifecycle | null>(null);
 
 	positionRef.current = props.positionMs;
 	isPlayingRef.current = props.isPlaying;
 	splashActiveRef.current = props.splashActive ?? false;
+	shelfCameraModeRef.current = props.fxDefaults?.shelfCameraMode ?? "static";
+	wallpaperSafeRef.current = isWallpaperSafeShelfPreset(props.fxDefaults?.preset);
 
 	const nextShelfItems = useMemo(
 		() => mapQueueToShelfItems(props.queue ?? [], props.currentTrack ?? null),
@@ -75,6 +80,8 @@ export function VisualEngineHost(props: VisualEngineHostProps): ReactElement {
 		shelfItemsRef,
 		shelfItemsVersionRef,
 		splashActiveRef,
+		shelfCameraModeRef,
+		wallpaperSafeRef,
 		lifecycleRef,
 		coverResolution: props.coverResolution ?? 1.55,
 		fxDefaults: props.fxDefaults,
