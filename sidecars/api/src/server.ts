@@ -19,6 +19,11 @@ import { buildDiagnostics } from "./services/diagnostics";
 import { resolveAudioProxy, type AudioProxy } from "./services/audio-proxy";
 import { resolveImageProxy, type ImageProxy } from "./services/image-proxy";
 import {
+  createSidecarLogger,
+  redactLogValue,
+  type SidecarLogger
+} from "./services/sidecar-log";
+import {
   crossSourceResolver,
   type CrossSourceResolver
 } from "./services/cross-source-resolver";
@@ -32,6 +37,7 @@ export type RouteHandlerDeps = {
   audioProxy?: AudioProxy;
   imageProxy?: ImageProxy;
   providerAdapters?: Record<ProviderId, ProviderAdapter>;
+  logger?: SidecarLogger;
 };
 
 export function createRouteHandler(deps: RouteHandlerDeps = {}) {
@@ -39,12 +45,16 @@ export function createRouteHandler(deps: RouteHandlerDeps = {}) {
   const audioProxy = deps.audioProxy ?? resolveAudioProxy;
   const imageProxy = deps.imageProxy ?? resolveImageProxy;
   const providerAdapters = deps.providerAdapters ?? providers;
+  const logger = deps.logger ?? createSidecarLogger();
 
   return async function handleRoute(request: Request): Promise<Response> {
+    const startedAt = performance.now();
     const url = new URL(request.url);
     const method = request.method;
     const path = url.pathname;
+    let response: Response;
 
+    try {
     if (path === "/health" && method === "GET") {
       const body = HealthResponseSchema.parse({
         ok: true,
@@ -53,32 +63,42 @@ export function createRouteHandler(deps: RouteHandlerDeps = {}) {
         schemaVersion: schemaVersion(),
         providers: PROVIDER_IDS
       });
-      return json(body);
+      response = json(body);
+      await logRequest(logger, { method, path, status: response.status, startedAt });
+      return response;
     }
 
     if (path === "/providers/capabilities" && method === "GET") {
       const matrix: CapabilityMatrix = buildCapabilityMatrix();
-      return json(ok(matrix));
+      response = json(ok(matrix));
+      await logRequest(logger, { method, path, status: response.status, startedAt });
+      return response;
     }
 
     if (path === "/diagnostics" && method === "GET") {
-      return json(buildDiagnostics());
+      response = json(buildDiagnostics());
+      await logRequest(logger, { method, path, status: response.status, startedAt });
+      return response;
     }
 
     if (path === "/audio-proxy" && method === "GET") {
       const target = url.searchParams.get("url") ?? "";
-      return await audioProxy({ target, request });
+      response = await audioProxy({ target, request });
+      await logRequest(logger, { method, path, status: response.status, startedAt });
+      return response;
     }
 
     if (path === "/image-proxy" && method === "GET") {
       const target = url.searchParams.get("url") ?? "";
-      return await imageProxy({ target, request });
+      response = await imageProxy({ target, request });
+      await logRequest(logger, { method, path, status: response.status, startedAt });
+      return response;
     }
 
     if (path === "/search" && method === "GET") {
       const keyword = url.searchParams.get("keyword") ?? "";
       if (!keyword.trim()) {
-        return json(
+        response = json(
           fail({
             code: "BAD_REQUEST",
             message: "keyword required",
@@ -86,11 +106,13 @@ export function createRouteHandler(deps: RouteHandlerDeps = {}) {
           }),
           400
         );
+        await logRequest(logger, { method, path, status: response.status, startedAt });
+        return response;
       }
       const providerRaw = url.searchParams.get("provider");
       const parsedProvider = providerRaw === null ? undefined : ProviderIdSchema.safeParse(providerRaw);
       if (parsedProvider && !parsedProvider.success) {
-        return json(
+        response = json(
           fail({
             code: "NOT_FOUND",
             message: `unknown provider: ${providerRaw}`,
@@ -98,13 +120,19 @@ export function createRouteHandler(deps: RouteHandlerDeps = {}) {
           }),
           404
         );
+        await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerRaw ?? undefined });
+        return response;
       }
       const limit = parseLimit(url.searchParams.get("limit"));
       const provider = parsedProvider?.success ? parsedProvider.data : undefined;
       try {
-        return json(ok(await resolver.resolveSearch({ keyword, provider, limit })));
+        response = json(ok(await resolver.resolveSearch({ keyword, provider, limit })));
+        await logRequest(logger, { method, path, status: response.status, startedAt, provider });
+        return response;
       } catch (err) {
-        return json(normalizeError(provider ?? PROVIDER_IDS[0], err), statusFromError(err));
+        response = json(normalizeError(provider ?? PROVIDER_IDS[0], err), statusFromError(err));
+        await logRequest(logger, { method, path, status: response.status, startedAt, provider, error: err });
+        return response;
       }
     }
 
@@ -112,7 +140,7 @@ export function createRouteHandler(deps: RouteHandlerDeps = {}) {
       const body = await parseJsonBody(request);
       const parsedTrack = TrackSchema.safeParse(body);
       if (!parsedTrack.success) {
-        return json(
+        response = json(
           fail({
             code: "BAD_REQUEST",
             message: "invalid or missing Track body",
@@ -120,11 +148,17 @@ export function createRouteHandler(deps: RouteHandlerDeps = {}) {
           }),
           400
         );
+        await logRequest(logger, { method, path, status: response.status, startedAt });
+        return response;
       }
       try {
-        return json(ok(await resolver.resolveSongUrl(parsedTrack.data)));
+        response = json(ok(await resolver.resolveSongUrl(parsedTrack.data)));
+        await logRequest(logger, { method, path, status: response.status, startedAt, provider: parsedTrack.data.provider });
+        return response;
       } catch (err) {
-        return json(normalizeError(parsedTrack.data.provider, err), statusFromError(err));
+        response = json(normalizeError(parsedTrack.data.provider, err), statusFromError(err));
+        await logRequest(logger, { method, path, status: response.status, startedAt, provider: parsedTrack.data.provider, error: err });
+        return response;
       }
     }
 
@@ -134,7 +168,7 @@ export function createRouteHandler(deps: RouteHandlerDeps = {}) {
       const sub = decodeURIComponent(match[2]);
       const parsed = ProviderIdSchema.safeParse(providerRaw);
       if (!parsed.success) {
-        return json(
+        response = json(
           fail({
             code: "NOT_FOUND",
             message: `unknown provider: ${providerRaw}`,
@@ -142,6 +176,8 @@ export function createRouteHandler(deps: RouteHandlerDeps = {}) {
           }),
           404
         );
+        await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerRaw });
+        return response;
       }
       const providerId: ProviderId = parsed.data;
       const adapter = providerAdapters[providerId];
@@ -154,7 +190,7 @@ export function createRouteHandler(deps: RouteHandlerDeps = {}) {
               ? (body as { cookie?: unknown }).cookie
               : undefined;
           if (typeof cookie !== "string" || cookie.trim().length === 0) {
-            return json(
+            response = json(
               fail({
                 code: "BAD_REQUEST",
                 message: "cookie required",
@@ -163,19 +199,27 @@ export function createRouteHandler(deps: RouteHandlerDeps = {}) {
               }),
               400
             );
+            await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub });
+            return response;
           }
           setRuntimeProviderCookie(providerId, cookie);
-          return json(ok(ProviderSessionCookieAckSchema.parse({ provider: providerId, stored: true })));
+          response = json(ok(ProviderSessionCookieAckSchema.parse({ provider: providerId, stored: true })));
+          await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub });
+          return response;
         }
         if (
           (sub === "session-cookie" && method === "DELETE") ||
           (sub === "session-cookie/clear" && method === "POST")
         ) {
           clearRuntimeProviderCookie(providerId);
-          return json(ok(ProviderSessionCookieAckSchema.parse({ provider: providerId, stored: false })));
+          response = json(ok(ProviderSessionCookieAckSchema.parse({ provider: providerId, stored: false })));
+          await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub });
+          return response;
         }
         if (sub === "login-status" && method === "GET") {
-          return json(ok(await adapter.loginStatus()));
+          response = json(ok(await adapter.loginStatus()));
+          await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub });
+          return response;
         }
         if (sub === "logout" && method === "POST") {
           try {
@@ -183,12 +227,14 @@ export function createRouteHandler(deps: RouteHandlerDeps = {}) {
           } finally {
             clearRuntimeProviderCookie(providerId);
           }
-          return json(ok({ provider: providerId, loggedOut: true }));
+          response = json(ok({ provider: providerId, loggedOut: true }));
+          await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub });
+          return response;
         }
         if (sub === "search" && method === "GET") {
           const keyword = url.searchParams.get("keyword") ?? "";
           if (!keyword.trim()) {
-            return json(
+            response = json(
               fail({
                 code: "BAD_REQUEST",
                 message: "keyword required",
@@ -197,14 +243,18 @@ export function createRouteHandler(deps: RouteHandlerDeps = {}) {
               }),
               400
             );
+            await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub });
+            return response;
           }
           const limit = parseLimit(url.searchParams.get("limit"));
-          return json(ok(await adapter.search({ keyword, limit })));
+          response = json(ok(await adapter.search({ keyword, limit })));
+          await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub });
+          return response;
         }
         if (sub === "song-url" && method === "POST") {
           const body = await parseJsonBody(request);
           if (body === null) {
-            return json(
+            response = json(
               fail({
                 code: "BAD_REQUEST",
                 message: "invalid or missing JSON body",
@@ -213,13 +263,17 @@ export function createRouteHandler(deps: RouteHandlerDeps = {}) {
               }),
               400
             );
+            await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub });
+            return response;
           }
-          return json(ok(await adapter.songUrl(body as Track)));
+          response = json(ok(await adapter.songUrl(body as Track)));
+          await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub });
+          return response;
         }
         if (sub === "lyric" && method === "POST") {
           const body = await parseJsonBody(request);
           if (body === null) {
-            return json(
+            response = json(
               fail({
                 code: "BAD_REQUEST",
                 message: "invalid or missing JSON body",
@@ -228,18 +282,26 @@ export function createRouteHandler(deps: RouteHandlerDeps = {}) {
               }),
               400
             );
+            await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub });
+            return response;
           }
-          return json(ok(await adapter.lyric(body as Track)));
+          response = json(ok(await adapter.lyric(body as Track)));
+          await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub });
+          return response;
         }
         if (sub === "playlists" && method === "GET") {
-          return json(ok(await adapter.playlistList()));
+          response = json(ok(await adapter.playlistList()));
+          await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub });
+          return response;
         }
         const detailMatch = sub.match(/^playlists\/(.+)$/);
         if (detailMatch && method === "GET") {
           const id = decodeURIComponent(detailMatch[1]);
-          return json(ok(await adapter.playlistDetail(id)));
+          response = json(ok(await adapter.playlistDetail(id)));
+          await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: "playlists/detail" });
+          return response;
         }
-        return json(
+        response = json(
           fail({
             code: "NOT_FOUND",
             message: `unknown route: ${method} ${path}`,
@@ -247,12 +309,16 @@ export function createRouteHandler(deps: RouteHandlerDeps = {}) {
           }),
           404
         );
+        await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub });
+        return response;
       } catch (err) {
-        return json(normalizeError(providerId, err), statusFromError(err));
+        response = json(normalizeError(providerId, err), statusFromError(err));
+        await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub, error: err });
+        return response;
       }
     }
 
-    return json(
+    response = json(
       fail({
         code: "NOT_FOUND",
         message: `unknown route: ${method} ${path}`,
@@ -260,6 +326,12 @@ export function createRouteHandler(deps: RouteHandlerDeps = {}) {
       }),
       404
     );
+    await logRequest(logger, { method, path, status: response.status, startedAt });
+    return response;
+    } catch (err) {
+      await logRequest(logger, { method, path, status: 500, startedAt, error: err });
+      throw err;
+    }
   };
 }
 
@@ -286,10 +358,55 @@ async function parseJsonBody(request: Request): Promise<unknown | null> {
 }
 
 if (import.meta.main) {
+  const logger = createSidecarLogger();
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port: port(),
-    fetch: routeHandler
+    fetch: createRouteHandler({ logger })
+  });
+  void logger.log({
+    event: "startup",
+    hostname: server.hostname,
+    port: server.port,
+    appVersion: appVersion(),
+    apiVersion: apiVersion(),
+    schemaVersion: schemaVersion()
   });
   console.log(`[sidecar] listening on http://${server.hostname}:${server.port}`);
+}
+
+async function logRequest(
+  logger: SidecarLogger,
+  input: {
+    method: string;
+    path: string;
+    status: number;
+    startedAt: number;
+    provider?: unknown;
+    action?: unknown;
+    error?: unknown;
+  }
+): Promise<void> {
+  try {
+    const entry: Record<string, unknown> = {
+      event: "request",
+      method: input.method,
+      path: input.path,
+      status: input.status,
+      durationMs: Math.max(0, Math.round((performance.now() - input.startedAt) * 10) / 10)
+    };
+    if (input.provider !== undefined) entry.provider = input.provider;
+    if (input.action !== undefined) entry.action = input.action;
+    if (input.error !== undefined) {
+      entry.error = errorSummary(input.error);
+    }
+    await logger.log(entry);
+  } catch {
+  }
+}
+
+function errorSummary(err: unknown): unknown {
+  if (err instanceof ProviderNotImplementedError) return { name: "ProviderNotImplementedError", action: err.action };
+  if (err instanceof Error) return redactLogValue({ name: err.name, message: err.message });
+  return redactLogValue(err);
 }

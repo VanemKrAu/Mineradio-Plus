@@ -3,6 +3,7 @@ import { routeHandler, createRouteHandler } from "./server";
 import type { Track } from "@mineradio/shared";
 import { providers } from "./providers/registry";
 import { ProviderError, type ProviderAdapter } from "./providers/provider-adapter";
+import type { SidecarLogger } from "./services/sidecar-log";
 
 async function call(path: string, init?: RequestInit): Promise<Response> {
   const req = new Request(`http://127.0.0.1${path}`, init);
@@ -31,6 +32,37 @@ test("GET /health returns 200 with both providers", async () => {
   const b = await body(r);
   expect(b.ok).toBe(true);
   expect(b.providers).toEqual(["netease", "qq"]);
+});
+
+test("route handler writes sanitized request logs through injected sidecar logger", async () => {
+  const entries: Record<string, unknown>[] = [];
+  const logger: SidecarLogger = {
+    async log(entry) {
+      entries.push(entry);
+    }
+  };
+  const handler = createRouteHandler({ logger });
+
+  try {
+    const r = await handler(new Request("http://127.0.0.1/providers/qq/session-cookie", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer secret" },
+      body: JSON.stringify({ cookie: "qqmusic_key=secret" })
+    }));
+
+    expect(r.status).toBe(200);
+    expect(entries.length).toBe(1);
+    expect(entries[0].event).toBe("request");
+    expect(entries[0].method).toBe("POST");
+    expect(entries[0].path).toBe("/providers/qq/session-cookie");
+    expect(entries[0].status).toBe(200);
+    const serialized = JSON.stringify(entries);
+    expect(serialized).not.toContain("qqmusic_key");
+    expect(serialized).not.toContain("Bearer secret");
+    expect(serialized).not.toContain("secret");
+  } finally {
+    await call("/providers/qq/session-cookie", { method: "DELETE" });
+  }
 });
 
 test("GET unknown path returns 404 NOT_FOUND envelope", async () => {
