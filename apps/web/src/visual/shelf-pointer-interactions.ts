@@ -6,6 +6,7 @@ import {
 	type ShelfRaycastCardHit,
 	type ShelfPointerRaycastHitGetter,
 	type ShelfPointerRaycastInfo,
+	type ShelfSelectSoundVariant,
 } from "@mineradio/visual-engine";
 
 export interface ShelfPointerInteractionTarget {
@@ -52,6 +53,7 @@ export interface ShelfPointerInteractionOptions {
 	setShelfMode?: (mode: "side") => void;
 	onShelfPlayQueueIndex?: (index: number) => void;
 	onShelfDetailRowClick?: (payload: ShelfDetailRowClickPayload) => void;
+	onShelfSelectFeedback?: (direction: number, variant: ShelfSelectSoundVariant) => void;
 	onOpenQueuePanel?: () => void;
 }
 
@@ -353,13 +355,14 @@ export function attachShelfPointerInteractionWiring(
 			if (!pick || isShelfDetailPlaceholderRow(pick.row)) return;
 			mouseEvent.preventDefault?.();
 			mouseEvent.stopImmediatePropagation?.();
+			opts.onShelfSelectFeedback?.(pick.index - opts.shelfManager.getCenterIdx(), "row");
 			opts.onShelfDetailRowClick?.({ row: pick.row, index: pick.index });
 			return;
 		}
 		if (!canStartInteraction(event)) return;
 		const hit = opts.getHit(pointerInfoFromEvent(event as MouseEvent));
 		if (!canUseHit(hit)) return;
-		activateShelfPrimaryHit({
+		const activation = activateShelfPrimaryHit({
 			hit,
 			getCenterIdx: opts.shelfManager.getCenterIdx,
 			scrollBy: opts.shelfManager.scrollBy,
@@ -374,6 +377,9 @@ export function attachShelfPointerInteractionWiring(
 				});
 			},
 		});
+		if (activation.kind === "scroll") {
+			opts.onShelfSelectFeedback?.(activation.delta, "card");
+		}
 	};
 
 	const onWheel: EventListener = (event) => {
@@ -384,7 +390,9 @@ export function attachShelfPointerInteractionWiring(
 			if (!contentList) return;
 			wheelEvent.preventDefault();
 			wheelEvent.stopImmediatePropagation();
-			contentList.scrollBy(wheelEvent.deltaY > 0 ? 1 : -1);
+			const direction = wheelEvent.deltaY > 0 ? 1 : -1;
+			contentList.scrollBy(direction);
+			opts.onShelfSelectFeedback?.(direction, "row");
 			return;
 		}
 		if (!canStartInteraction(event)) return;
@@ -397,7 +405,9 @@ export function attachShelfPointerInteractionWiring(
 		) return;
 		wheelEvent.preventDefault();
 		wheelEvent.stopImmediatePropagation();
-		opts.shelfManager.scrollBy(wheelEvent.deltaY > 0 ? 1 : -1);
+		const direction = wheelEvent.deltaY > 0 ? 1 : -1;
+		opts.shelfManager.scrollBy(direction);
+		opts.onShelfSelectFeedback?.(direction, "card");
 	};
 
 	const onContextMenu: EventListener = (event) => {

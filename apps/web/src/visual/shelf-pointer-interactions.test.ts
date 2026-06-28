@@ -698,6 +698,7 @@ test("attachShelfPointerInteractionWiring scrolls non-centered clicks and opens 
 	const target = new FakePointerTarget();
 	const scrolled: number[] = [];
 	const focus: unknown[] = [];
+	const feedback: unknown[] = [];
 	let centerIdx = 1;
 	let hit = makeHit(3, { kind: "loadPlaylist", playlistId: "p3", title: "Mix 3" });
 	const cleanup = attachShelfPointerInteractionWiring({
@@ -720,6 +721,7 @@ test("attachShelfPointerInteractionWiring scrolls non-centered clicks and opens 
 		getWallpaperSafe: () => false,
 		getViewportWidth: () => 1200,
 		getViewportHeight: () => 900,
+		onShelfSelectFeedback: (direction, variant) => feedback.push({ direction, variant }),
 	});
 
 	target.emit("click", { clientX: 10, clientY: 20, target: null });
@@ -729,6 +731,7 @@ test("attachShelfPointerInteractionWiring scrolls non-centered clicks and opens 
 	cleanup();
 
 	expect(scrolled).toEqual([2]);
+	expect(feedback).toEqual([{ direction: 2, variant: "card" }]);
 	expect(focus).toEqual([
 		["shelf-detail", { immediate: true, portrait: true, wallpaperSafe: false }],
 	]);
@@ -737,6 +740,7 @@ test("attachShelfPointerInteractionWiring scrolls non-centered clicks and opens 
 test("attachShelfPointerInteractionWiring scrolls stage card-hit wheel in delta direction and consumes event", () => {
 	const target = new FakePointerTarget();
 	const scrolled: number[] = [];
+	const feedback: unknown[] = [];
 	const cleanup = attachShelfPointerInteractionWiring({
 		target,
 		shelfManager: makeShelfManagerMock({
@@ -755,6 +759,7 @@ test("attachShelfPointerInteractionWiring scrolls stage card-hit wheel in delta 
 		getWallpaperSafe: () => false,
 		getViewportWidth: () => 1200,
 		getViewportHeight: () => 900,
+		onShelfSelectFeedback: (direction, variant) => feedback.push({ direction, variant }),
 	});
 
 	const down = makeWheelEvent({ deltaY: 120 });
@@ -764,6 +769,10 @@ test("attachShelfPointerInteractionWiring scrolls stage card-hit wheel in delta 
 	cleanup();
 
 	expect(scrolled).toEqual([1, -1]);
+	expect(feedback).toEqual([
+		{ direction: 1, variant: "card" },
+		{ direction: -1, variant: "card" },
+	]);
 	expect(down.calls).toEqual(["preventDefault", "stopImmediatePropagation"]);
 	expect(up.calls).toEqual(["preventDefault", "stopImmediatePropagation"]);
 	expect(target.options.get("wheel")).toEqual([{ passive: false, capture: true }]);
@@ -1530,6 +1539,7 @@ test("attachShelfPointerInteractionWiring clicks open detail screen row and skip
 	const target = new FakePointerTarget();
 	const played: number[] = [];
 	const detailClicks: unknown[] = [];
+	const feedback: unknown[] = [];
 	const queriedPointers: Array<{ x: number; y: number }> = [];
 	const row = { id: "song-3", name: "加载中…", artist: "Artist 3" };
 	const cleanup = attachShelfPointerInteractionWiring({
@@ -1562,6 +1572,7 @@ test("attachShelfPointerInteractionWiring clicks open detail screen row and skip
 		getViewportHeight: () => 900,
 		onShelfPlayQueueIndex: (idx) => played.push(idx),
 		onShelfDetailRowClick: (payload) => detailClicks.push(payload),
+		onShelfSelectFeedback: (direction, variant) => feedback.push({ direction, variant }),
 	});
 
 	const event = makeClickEvent({ clientX: 320, clientY: 240 });
@@ -1570,6 +1581,7 @@ test("attachShelfPointerInteractionWiring clicks open detail screen row and skip
 
 	expect(queriedPointers).toEqual([{ x: 320, y: 240 }]);
 	expect(detailClicks).toEqual([{ row, index: 3 }]);
+	expect(feedback).toEqual([{ direction: 3, variant: "row" }]);
 	expect(played).toEqual([]);
 	expect(event.calls).toEqual(["preventDefault", "stopImmediatePropagation"]);
 });

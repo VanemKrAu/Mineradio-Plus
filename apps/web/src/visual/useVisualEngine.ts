@@ -10,6 +10,7 @@ import {
 	createShelfManagerWithThree,
 	createShelfPointerRaycastFocus,
 	createShelfPointerRaycastHitGetter,
+	createShelfSelectSoundPlayer,
 	createShelfStep,
 	createStageLyricsLifecycle,
 	RenderStepSlot,
@@ -26,6 +27,7 @@ import {
 	type ShelfManager,
 	type ShelfItem,
 	type ShelfOpenDetailContentPayload,
+	type ShelfSelectSoundPlayer,
 	type StageLyricsLifecycle,
 } from "@mineradio/visual-engine";
 import {
@@ -77,6 +79,7 @@ interface MountedHandles {
 	connectorParticles: ConnectorParticles;
 	lifecycle: StageLyricsLifecycle;
 	renderLoop: RenderLoop;
+	shelfSelectSound: ShelfSelectSoundPlayer | null;
 	audioContext: AudioContext | null;
 	offHome: () => void;
 	offCamera: () => void;
@@ -360,6 +363,14 @@ export function useVisualEngine(refs: VisualEngineRefs): void {
 				camera: renderer.camera,
 				getCurrentTime: () => refs.positionRef.current / 1000,
 			});
+			const shelfSelectSound = createShelfSelectSoundPlayer({
+				window,
+				volume: () => {
+					const audio = refs.audioElementRef.current;
+					if (!audio || audio.muted) return 0;
+					return Number.isFinite(audio.volume) ? audio.volume : 0.65;
+				},
+			});
 			const freeCamera = createDefaultFreeCameraState();
 			const homeVisual = await createHomeVisual({
 				scene: renderer.scene,
@@ -581,6 +592,9 @@ export function useVisualEngine(refs: VisualEngineRefs): void {
 				setShelfMode: (mode) => setRuntimeShelfMode(refs.shelfModeRef, mode, refs.onShelfModeChange),
 				onShelfPlayQueueIndex: (index) => refs.onShelfPlayQueueIndexRef?.current?.(index),
 				onShelfDetailRowClick: (payload) => refs.onShelfDetailRowClickRef?.current?.(payload),
+				onShelfSelectFeedback: (direction, variant) => {
+					shelfSelectSound.play(direction, variant);
+				},
 			});
 			const offFreeCamera = attachFreeCameraHost({
 				target: window,
@@ -602,6 +616,7 @@ export function useVisualEngine(refs: VisualEngineRefs): void {
 				connectorParticles,
 				lifecycle,
 				renderLoop,
+				shelfSelectSound,
 				audioContext: null,
 				offHome,
 				offCamera,
