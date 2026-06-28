@@ -23,6 +23,7 @@ import {
 	type ShelfPresence,
 } from "../stores/shelf-store";
 import { useUiStore } from "../stores/ui-store";
+import { useUpdateStore } from "../stores/update-store";
 import {
 	closeDesktopLyricsWindow,
 	configureGlobalHotkeys,
@@ -43,10 +44,12 @@ import {
 	type SidecarStatus,
 	type WindowState,
 } from "../tauri/runtime";
+import { checkForUpdate, getUpdaterStatus } from "../tauri/updater";
 import { BottomControlsHost } from "../components/shell/BottomControlsHost";
 import { SearchShell } from "../components/shell/SearchShell";
 import { SidecarRecoveryNotice, type SidecarRecoveryNoticeState } from "../components/shell/SidecarRecoveryNotice";
 import { TopRightControls } from "../components/shell/TopRightControls";
+import { UpdateHost } from "../components/shell/UpdateHost";
 import { EmptyHomeHost } from "../home/EmptyHomeHost";
 import { SplashHost, type SplashHostProps } from "../visual/SplashHost";
 import { VisualEngineHost } from "../visual/VisualEngineHost";
@@ -200,6 +203,7 @@ export function App({ SplashComponent = SplashHost, VisualComponent = VisualEngi
 	const [customLyricStatus, setCustomLyricStatus] = useState<{ text: string; tone?: "good" | "fail" }>({ text: "" });
 	const [customLyricVersion, setCustomLyricVersion] = useState(0);
 	const [desktopLyricsEnabled, setDesktopLyricsEnabled] = useState(false);
+	const [updateModalOpen, setUpdateModalOpen] = useState(false);
 
 	const currentTrack = usePlaybackStore((s) => s.currentTrack);
 	const queue = usePlaybackStore((s) => s.queue);
@@ -224,6 +228,9 @@ export function App({ SplashComponent = SplashHost, VisualComponent = VisualEngi
 	const toast = useUiStore((s) => s.toast);
 	const showToast = useUiStore((s) => s.showToast);
 	const clearToast = useUiStore((s) => s.clearToast);
+	const updateState = useUpdateStore();
+	const applyUpdateCheckResult = useUpdateStore((s) => s.applyCheckResult);
+	const setUpdateStatus = useUpdateStore((s) => s.setStatus);
 
 	const lyricsPayload = useLyricsStore((s) => s.payload);
 	const setLyricsPayload = useLyricsStore((s) => s.setPayload);
@@ -453,6 +460,22 @@ export function App({ SplashComponent = SplashHost, VisualComponent = VisualEngi
 			showToast(message);
 		}
 	}, [showToast]);
+
+	const refreshUpdateStatus = useCallback(async (manual = false) => {
+		try {
+			if (manual) setUpdateStatus("checking");
+			const result = manual ? await checkForUpdate() : await getUpdaterStatus();
+			applyUpdateCheckResult(result);
+			if (manual) {
+				if (result.error) showToast(result.message || result.error);
+				else if (result.available) showToast(result.signatureGate ? "发现新版本，签名密钥未配置" : `发现新版本 v${result.version ?? ""}`);
+				else showToast("当前已是最新版本");
+			}
+		} catch (e) {
+			setUpdateStatus("error");
+			showToast(e instanceof Error ? e.message : "更新检测失败");
+		}
+	}, [applyUpdateCheckResult, setUpdateStatus, showToast]);
 
 	const setProviderStatus = useCallback((status: ProviderLoginStatus) => {
 		if (status.provider === "netease") setNeteaseStatus(status);
@@ -788,6 +811,10 @@ export function App({ SplashComponent = SplashHost, VisualComponent = VisualEngi
 	}, [clearToast, toast]);
 
 	useEffect(() => {
+		void refreshUpdateStatus(false);
+	}, [refreshUpdateStatus]);
+
+	useEffect(() => {
 		if (!desktopLyricsEnabled) return;
 		void updateDesktopLyricsPayload({
 			enabled: true,
@@ -1073,6 +1100,17 @@ export function App({ SplashComponent = SplashHost, VisualComponent = VisualEngi
 				onHideCapsule={() => showUnavailable("账号胶囊自动隐藏已记录，登录完成后生效")}
 				loggedIn={!!neteaseStatus?.loggedIn || !!qqStatus?.loggedIn}
 				accountLabel={neteaseStatus?.nickname ?? qqStatus?.nickname ?? neteaseStatus?.userId ?? qqStatus?.userId ?? undefined}
+				updateSlot={(
+					<div id="update-shell">
+						<UpdateHost
+							state={updateState}
+							open={updateModalOpen}
+							onOpen={() => setUpdateModalOpen(true)}
+							onClose={() => setUpdateModalOpen(false)}
+							onCheck={() => void refreshUpdateStatus(true)}
+						/>
+					</div>
+				)}
 			/>
 			<BottomControlsHost
 				visible={consoleVisible}

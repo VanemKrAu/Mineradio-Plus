@@ -1,4 +1,4 @@
-import { type ReactElement } from "react";
+import { type ReactElement, type ReactNode } from "react";
 
 export interface TopRightControlsProps {
 	onHome?: () => void;
@@ -6,9 +6,10 @@ export interface TopRightControlsProps {
 	onHideCapsule?: () => void;
 	loggedIn?: boolean;
 	accountLabel?: string;
+	updateSlot?: ReactNode;
 }
 
-export function TopRightControls({ onHome, onLogin, onHideCapsule, loggedIn = false, accountLabel }: TopRightControlsProps): ReactElement {
+export function TopRightControls({ onHome, onLogin, onHideCapsule, loggedIn = false, accountLabel, updateSlot }: TopRightControlsProps): ReactElement {
 	return (
 		<div id="top-right">
 			<button
@@ -38,6 +39,7 @@ export function TopRightControls({ onHome, onLogin, onHideCapsule, loggedIn = fa
 			<button id="user-btn" className={loggedIn ? "icon-btn logged-in" : "icon-btn logged-out"} type="button" onClick={onLogin} title={loggedIn ? "账号信息" : "登录账号"} aria-label={loggedIn ? "账号信息" : "登录账号"}>
 				<span className="login-word">{loggedIn ? (accountLabel ?? "已登录") : "登录"}</span>
 			</button>
+			{updateSlot}
 		</div>
 	);
 }
