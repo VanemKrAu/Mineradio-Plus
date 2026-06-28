@@ -35,7 +35,7 @@ src/
 └── visual/
     ├── SplashHost.tsx              # Splash engine 容器 + auto-dismiss 计时
     ├── VisualEngineHost.tsx        # visual-engine 流水线 react 容器（#visual-host 根 div）
-    ├── useVisualEngine.ts          # 533 行 monolith：AudioContext + createRenderer + render loop + 6 registered steps + 2 pointer subsystems
+    ├── useVisualEngine.ts          # visual-engine monolith：AudioContext + createRenderer + render loop + registered visual steps + 2 pointer subsystems
     ├── PlayerConsoleHost.tsx       # 控制台 + GSAP console motion + SVG glass卉 (独立未挂 App.tsx)
     └── shelf-*.{ts,tsx} 4 files    # pointer interactions / focus zone / detail data / items mapper (host-side shelf 接 VisualEngineHost)
 ```
@@ -73,7 +73,7 @@ src/
 
 ## UNIQUE STYLES
 
-- **single visual-engine host monolith `useVisualEngine.ts` 533 行**: 不拆；它 hold住所有 Three.js handle + 6 个 registerStep 注册 + 2 个 pointer 子系统 attach；组件内部拆 5 helper 即可，保持单 useEffect correctness。
+- **single visual-engine host monolith `useVisualEngine.ts`**: 不拆；它 hold住所有 Three.js handle + render-loop step 注册（HomeVisual / Shelf / StageLyrics 等）+ 2 个 pointer 子系统 attach；组件内部拆 helper 即可，保持单 useEffect correctness。
 - **17 try/catch disposeHandles**: visual-engine 各模块 dispose 不稳定（部分 throw on double-dispose）；逐个 try/catch 容错；新接的模块同样处理。
 - **AudioContext handle `handles.audioContext` 当前永远是 `null`**: 这是已知缺陷 — hot-reload 会 orphan 一个 AudioContext（中等优先，先记 follow-up）。改 useVisualEngine 记得 closing 它。
 - **`shelf-store` 是 stub**：当前实际 shelf UI 状态走 raw refs（VisualEngineHost 里 shelfModeRef 等）；未接 store；后续 P9 移到 store-driven。
