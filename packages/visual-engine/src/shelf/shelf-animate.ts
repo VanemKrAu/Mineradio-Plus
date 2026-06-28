@@ -14,6 +14,10 @@ import {
 	type ShelfCardDrawState,
 } from "./shelf-card-sprite";
 import {
+	createShelfContentList,
+	type ShelfContentList,
+} from "./shelf-content-list";
+import {
 	createShelfState,
 	type ShelfMode,
 	type ShelfPane,
@@ -90,6 +94,8 @@ export interface ShelfManager {
 	schedulePaneSwitch(dir: number): void;
 	openDetail(idx: number, opts?: { playlistId?: string; title?: string }): void;
 	closeDetail(opts?: { immediate?: boolean }): void;
+	hasOpenContent(): boolean;
+	getContentList(): ShelfContentList | null;
 	getSnapshot(): ShelfSnapshot;
 	getRenderedCardCount(): number;
 	raycastCards(raycaster: THREE.Raycaster): ShelfRaycastCardHit | null;
@@ -124,6 +130,8 @@ export function createShelfManager(opts: ShelfManagerOptions): ShelfManager {
 	const nowFn =
 		opts.now ??
 		(() => (typeof performance !== "undefined" ? performance.now() : Date.now()));
+	const contentList = createShelfContentList({ now: () => nowFn() / 1000 });
+	let openDetailCardKey: string | null = null;
 
 	return {
 		getState() {
@@ -149,6 +157,7 @@ export function createShelfManager(opts: ShelfManagerOptions): ShelfManager {
 			if (Math.abs(state.centerSmooth - state.centerTarget) < 0.001) {
 				state.centerSmooth = state.centerTarget;
 			}
+			if (contentList.isOpen()) contentList.advance(ctx.uniforms.uTime.value);
 			updateShelfVisibility();
 
 			breathPulseLast = computeBreathPulse(
@@ -271,11 +280,26 @@ export function createShelfManager(opts: ShelfManagerOptions): ShelfManager {
 		schedulePaneSwitch(dir) {
 			state.paneSwitchDir = dir < 0 ? -1 : 1;
 		},
-		openDetail(idx) {
+		openDetail(idx, detailOpts) {
 			state.openCardIdx = idx;
+			const item = data[idx];
+			openDetailCardKey = shelfItemIdentityKey(item);
+			const playlistId = detailOpts?.playlistId ?? item?.playlistId ?? podcastPlaylistId(item?.podcastKey) ?? "";
+			contentList.open({
+				playlistId,
+				title: detailOpts?.title ?? item?.title ?? "歌单详情",
+				kind: item?.type === "podcast" || item?.podcastKey || playlistId.startsWith("podcast:") ? "podcast" : "playlist",
+				sourceCard: item ? { item } : null,
+			});
 		},
 		closeDetail() {
-			state.openCardIdx = -1;
+			closeOpenDetail();
+		},
+		hasOpenContent() {
+			return contentList.isOpen();
+		},
+		getContentList() {
+			return contentList.isOpen() ? contentList : null;
 		},
 		getSnapshot() {
 			return {
@@ -641,7 +665,7 @@ export function createShelfManager(opts: ShelfManagerOptions): ShelfManager {
 			state.centerTarget = 0;
 			state.centerSmooth = 0;
 			state.selectedIdx = -1;
-			state.openCardIdx = -1;
+			closeOpenDetail();
 			return;
 		}
 		const max = length - 1;
@@ -649,7 +673,22 @@ export function createShelfManager(opts: ShelfManagerOptions): ShelfManager {
 		state.centerTarget = clampInt(state.centerTarget, 0, max);
 		state.centerSmooth = clampInt(state.centerSmooth, 0, max);
 		if (state.selectedIdx > max) state.selectedIdx = -1;
-		if (state.openCardIdx > max) state.openCardIdx = -1;
+		if (state.openCardIdx > max) {
+			closeOpenDetail();
+			return;
+		}
+		if (state.openCardIdx >= 0) {
+			const nextOpenDetailCardKey = shelfItemIdentityKey(data[state.openCardIdx]);
+			if (!nextOpenDetailCardKey || nextOpenDetailCardKey !== openDetailCardKey) {
+				closeOpenDetail();
+			}
+		}
+	}
+
+	function closeOpenDetail(): void {
+		state.openCardIdx = -1;
+		openDetailCardKey = null;
+		contentList.close();
 	}
 }
 
@@ -661,6 +700,23 @@ function clampInt(value: number, min: number, max: number): number {
 function clampRange(value: number, min: number, max: number): number {
 	if (!Number.isFinite(value)) return min;
 	return Math.max(min, Math.min(max, value));
+}
+
+function podcastPlaylistId(podcastKey: string | undefined): string | undefined {
+	if (!podcastKey) return undefined;
+	return podcastKey.startsWith("podcast:") ? podcastKey : `podcast:${podcastKey}`;
+}
+
+function shelfItemIdentityKey(item: ShelfItem | undefined): string | null {
+	if (!item) return null;
+	return [
+		item.type || "",
+		item.provider || "",
+		item.playlistId || "",
+		item.podcastKey || "",
+		item.queueIndex == null ? "" : item.queueIndex,
+		item.title || "",
+	].join("|");
 }
 
 export async function createShelfManagerWithThree(

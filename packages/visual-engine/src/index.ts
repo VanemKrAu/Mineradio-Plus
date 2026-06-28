@@ -263,6 +263,29 @@ export {
 	smoothstep01,
 } from "./shelf/reveal";
 export { updateHoverFloatMix } from "./shelf/hover-float";
+export {
+	CONTENT_VISIBLE_RADIUS,
+	CONTENT_MAX_RENDER,
+	computeContentPanelOpacity,
+	computeContentRowLayout,
+	createShelfContentList,
+	isShelfContentLoadingRow,
+} from "./shelf/shelf-content-list";
+export type {
+	ComputeContentRowLayoutInput,
+	ShelfContentKind,
+	ShelfContentList,
+	ShelfContentListOptions,
+	ShelfContentOpenOptions,
+	ShelfContentPanelOpacityInputs,
+	ShelfContentPlaceholderKind,
+	ShelfContentRenderWindow,
+	ShelfContentRow,
+	ShelfContentRowLayout,
+	ShelfContentRowLayoutInputs,
+	ShelfContentSnapshot,
+	ShelfContentSourceCard,
+} from "./shelf/shelf-content-list";
 export { createShelfManager, createShelfManagerWithThree } from "./shelf/shelf-animate";
 export type {
 	ShelfItem,

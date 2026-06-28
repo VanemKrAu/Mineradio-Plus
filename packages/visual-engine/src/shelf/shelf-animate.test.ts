@@ -447,6 +447,83 @@ test("ShelfManager.openDetail + closeDetail mutate openCardIdx", () => {
 	expect(m.getState().openCardIdx).toBe(-1);
 });
 
+test("ShelfManager exposes a content-list skeleton for open detail state", () => {
+	const m = createShelfManager({ now: () => 42000 });
+	expect(m.hasOpenContent()).toBe(false);
+	expect(m.getContentList()).toBeNull();
+
+	m.openDetail(1, { playlistId: "p1", title: "Playlist 1" });
+
+	expect(m.hasOpenContent()).toBe(true);
+	const list = m.getContentList();
+	expect(list?.isOpen()).toBe(true);
+	expect(list?.getSnapshot().playlistId).toBe("p1");
+	expect(list?.getSnapshot().playlistTitle).toBe("Playlist 1");
+	expect(list?.getSnapshot().openAnimAt).toBe(42);
+
+	m.closeDetail();
+	expect(m.hasOpenContent()).toBe(false);
+	expect(m.getContentList()).toBeNull();
+});
+
+test("ShelfManager closes content-list skeleton when shelf data shrink invalidates open detail", () => {
+	const m = createShelfManager({});
+	m.setData([{ type: "playlist", title: "A", playlistId: "p1" }]);
+	m.openDetail(0);
+	expect(m.hasOpenContent()).toBe(true);
+
+	m.setData([]);
+
+	expect(m.getState().openCardIdx).toBe(-1);
+	expect(m.hasOpenContent()).toBe(false);
+	expect(m.getContentList()).toBeNull();
+});
+
+test("ShelfManager closes content-list skeleton when same-index shelf data changes identity", () => {
+	const m = createShelfManager({});
+	m.setData([{ type: "playlist", title: "Playlist A", playlistId: "p-a" }]);
+	m.openDetail(0);
+	expect(m.getContentList()?.getSnapshot().playlistId).toBe("p-a");
+
+	m.setData([{ type: "playlist", title: "Playlist B", playlistId: "p-b" }]);
+
+	expect(m.getState().openCardIdx).toBe(-1);
+	expect(m.hasOpenContent()).toBe(false);
+	expect(m.getContentList()).toBeNull();
+});
+
+test("ShelfManager derives content-list podcast kind from explicit podcast detail id", () => {
+	const m = createShelfManager({});
+	m.openDetail(0, { playlistId: "podcast:daily", title: "Daily" });
+
+	expect(m.getContentList()?.getSnapshot().contentKind).toBe("podcast");
+});
+
+test("ShelfManager prefixes podcastKey fallback with baseline podcast id scheme", () => {
+	const m = createShelfManager({});
+	m.setData([{ type: "playlist", title: "Podcast shelf", podcastKey: "daily" }]);
+
+	m.openDetail(0);
+
+	expect(m.getContentList()?.getSnapshot().playlistId).toBe("podcast:daily");
+	expect(m.getContentList()?.getSnapshot().contentKind).toBe("podcast");
+});
+
+test("ShelfManager.update advances the owned content-list skeleton like baseline contentList.update(dt)", () => {
+	const m = createShelfManager({});
+	const u = createRuntimeUniforms();
+	m.openDetail(0, { playlistId: "p1", title: "Playlist 1" });
+	m.getContentList()?.setRows([
+		{ id: "a", name: "A" },
+		{ id: "b", name: "B" },
+	]);
+	m.getContentList()?.scrollBy(1);
+
+	m.update(makeCtx(u, 16));
+
+	expect(m.getContentList()?.getSnapshot().centerSmooth).toBeCloseTo(0.18, 6);
+});
+
 test("ShelfManager.update advances centerSmooth toward target with baseline lerp 0.16", () => {
 	const m = createShelfManager({});
 	const u = createRuntimeUniforms();
