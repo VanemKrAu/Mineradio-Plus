@@ -368,14 +368,7 @@ pub fn parse_health_response(body: &[u8]) -> Result<HealthInfo, SidecarError> {
         .and_then(|v| v.as_str())
         .ok_or_else(|| SidecarError::Parse("missing schemaVersion".into()))?
         .to_string();
-    let providers = match value.get("providers") {
-        Some(serde_json::Value::Array(arr)) => arr
-            .iter()
-            .filter_map(|item| item.as_str().map(|s| s.to_string()))
-            .collect(),
-        // Older sidecar builds omit the providers array; treat as empty.
-        _ => Vec::new(),
-    };
+    let providers = parse_health_provider_ids(&value);
     Ok(HealthInfo {
         ok,
         app_version,
@@ -383,6 +376,39 @@ pub fn parse_health_response(body: &[u8]) -> Result<HealthInfo, SidecarError> {
         schema_version,
         providers,
     })
+}
+
+fn provider_ids_from_array(value: Option<&serde_json::Value>) -> Vec<String> {
+    match value {
+        Some(serde_json::Value::Array(arr)) => arr
+            .iter()
+            .filter_map(|item| item.as_str().map(|s| s.to_string()))
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn parse_health_provider_ids(value: &serde_json::Value) -> Vec<String> {
+    let status_ids = value
+        .get("providerStatus")
+        .and_then(|status| status.get("providers"))
+        .and_then(|providers| providers.as_array())
+        .map(|providers| {
+            providers
+                .iter()
+                .filter_map(|item| {
+                    item.get("providerId")
+                        .and_then(|provider_id| provider_id.as_str())
+                        .map(|provider_id| provider_id.to_string())
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if !status_ids.is_empty() {
+        return status_ids;
+    }
+    // Older sidecar builds omit providerStatus; fall back to the legacy id array.
+    provider_ids_from_array(value.get("providers"))
 }
 
 fn parse_base_url(base_url: &str) -> Result<(String, u16), SidecarError> {
@@ -666,6 +692,36 @@ mod tests {
         assert_eq!(info.app_version, "x");
         assert_eq!(info.api_version, "0.1.0");
         assert_eq!(info.schema_version, "0.1.0");
+        assert_eq!(info.providers, vec!["netease".to_string(), "qq".to_string()]);
+    }
+
+    #[test]
+    fn parse_health_response_extracts_provider_ids_from_status_matrix() {
+        let body = r#"{
+            "ok": true,
+            "appVersion": "x",
+            "apiVersion": "0.1.0",
+            "schemaVersion": "0.1.0",
+            "providers": [],
+            "providerStatus": {
+                "version": "0.1.0",
+                "providers": [
+                    {
+                        "providerId": "netease",
+                        "available": true,
+                        "capabilities": ["search"],
+                        "message": "online"
+                    },
+                    {
+                        "providerId": "qq",
+                        "available": true,
+                        "capabilities": ["search"],
+                        "message": "online"
+                    }
+                ]
+            }
+        }"#;
+        let info = parse_health_response(body.as_bytes()).expect("should parse");
         assert_eq!(info.providers, vec!["netease".to_string(), "qq".to_string()]);
     }
 

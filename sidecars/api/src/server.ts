@@ -60,12 +60,14 @@ export function createRouteHandler(deps: RouteHandlerDeps = {}) {
 
     try {
     if (path === "/health" && method === "GET") {
+      const providerStatus = buildCapabilityMatrix();
       const body = HealthResponseSchema.parse({
         ok: true,
         appVersion: appVersion(),
         apiVersion: apiVersion(),
         schemaVersion: schemaVersion(),
-        providers: PROVIDER_IDS
+        providers: PROVIDER_IDS,
+        providerStatus
       });
       response = json(body);
       await logRequest(logger, { method, path, status: response.status, startedAt });

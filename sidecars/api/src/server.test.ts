@@ -32,6 +32,8 @@ test("GET /health returns 200 with both providers", async () => {
   const b = await body(r);
   expect(b.ok).toBe(true);
   expect(b.providers).toEqual(["netease", "qq"]);
+  expect(b.providerStatus.providers.map((p: { providerId: string }) => p.providerId)).toEqual(["netease", "qq"]);
+  expect(b.providerStatus.providers[0].capabilities).toContain("search");
 });
 
 test("route handler writes sanitized request logs through injected sidecar logger", async () => {
