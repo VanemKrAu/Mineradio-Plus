@@ -38,6 +38,7 @@ export interface PlayerConsoleHostProps {
 	onLyrics?: () => void;
 	onLyricSourceChange?: (mode: "original" | "custom") => void;
 	onOpenCustomLyrics?: () => void;
+	onCollectCurrent?: () => void;
 	onNotice?: (message: string) => void;
 	onSeek?: (positionMs: number) => void;
 	onVolumeChange?: (volume: number) => void;
@@ -114,6 +115,8 @@ export function PlayerConsoleHost(props: PlayerConsoleHostProps): ReactElement {
 	onLyricSourceChangeRef.current = props.onLyricSourceChange;
 	const onOpenCustomLyricsRef = useRef(props.onOpenCustomLyrics);
 	onOpenCustomLyricsRef.current = props.onOpenCustomLyrics;
+	const onCollectCurrentRef = useRef(props.onCollectCurrent);
+	onCollectCurrentRef.current = props.onCollectCurrent;
 	const onNoticeRef = useRef(props.onNotice);
 	onNoticeRef.current = props.onNotice;
 	const onSeekRef = useRef(props.onSeek);
@@ -337,7 +340,7 @@ export function PlayerConsoleHost(props: PlayerConsoleHostProps): ReactElement {
 					<button id="heart-btn" ref={registerNormal("heart-btn")} className="ctrl-btn" type="button" title="红心喜欢" aria-label="红心喜欢" onClick={() => noticeStub("红心喜欢需要账号登录后同步")}>
 						<svg viewBox="0 0 24 24" aria-hidden="true" width="21" height="21" fill="none" stroke="currentColor" strokeWidth={2}><path d="M20.8 4.6c-1.7-1.7-4.5-1.7-6.2 0L12 7.2 9.4 4.6c-1.7-1.7-4.5-1.7-6.2 0s-1.7 4.5 0 6.2L12 19.6l8.8-8.8c1.7-1.7 1.7-4.5 0-6.2Z" /></svg>
 					</button>
-					<button id="collect-btn" ref={registerNormal("collect-btn")} className="ctrl-btn" type="button" title="收藏到歌单" aria-label="收藏到歌单" onClick={() => noticeStub("收藏到歌单需要登录和歌单列表")}>
+					<button id="collect-btn" ref={registerNormal("collect-btn")} className="ctrl-btn" type="button" title="收藏到歌单" aria-label="收藏到歌单" onClick={() => onCollectCurrentRef.current?.()}>
 						<svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2}><path d="M4 19.5V5a2 2 0 0 1 2-2h12v18l-6-3-6 3a2 2 0 0 1-2-1.5Z" /></svg>
 					</button>
 				</div>

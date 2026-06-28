@@ -53,8 +53,8 @@ import { UpdateHost } from "../components/shell/UpdateHost";
 import { EmptyHomeHost } from "../home/EmptyHomeHost";
 import { SplashHost, type SplashHostProps } from "../visual/SplashHost";
 import { VisualEngineHost } from "../visual/VisualEngineHost";
-import { createShelfDetailContentLoader, handleShelfDetailRowAction } from "../visual/shelf-detail-data";
-import type { PlaybackQuality, PlaylistSummary, ProviderId, ProviderLoginStatus } from "@mineradio/shared";
+import { createShelfDetailContentLoader, handleShelfDetailRowAction, mapShelfDetailRowToTrack } from "../visual/shelf-detail-data";
+import type { PlaybackQuality, PlaylistSummary, ProviderId, ProviderLoginStatus, Track } from "@mineradio/shared";
 
 const SHOW_SPLASH = import.meta.env.VITE_SPLASH !== "0";
 const SIDECAR_STATUS_POLL_MS = 1500;
@@ -183,9 +183,16 @@ export function applyDesktopWindowShellState(state: WindowState): void {
 export type AppProps = {
 	SplashComponent?: (props: SplashHostProps) => ReactElement | null;
 	VisualComponent?: typeof VisualEngineHost;
+	createSidecarClient?: (cfg: RuntimeConfig) => SidecarClient;
+	initialRuntimeConfig?: RuntimeConfig | null;
 };
 
-export function App({ SplashComponent = SplashHost, VisualComponent = VisualEngineHost }: AppProps = {}): ReactElement {
+export function App({
+	SplashComponent = SplashHost,
+	VisualComponent = VisualEngineHost,
+	createSidecarClient = (cfg) => new SidecarClient(cfg.sidecarBaseUrl),
+	initialRuntimeConfig = null,
+}: AppProps = {}): ReactElement {
 	const [sidecarClient, setSidecarClient] = useState<SidecarClient | null>(null);
 	const [sidecarBaseUrl, setSidecarBaseUrl] = useState("");
 	const [splashActive, setSplashActive] = useState<boolean>(SHOW_SPLASH);
@@ -204,6 +211,8 @@ export function App({ SplashComponent = SplashHost, VisualComponent = VisualEngi
 	const [customLyricVersion, setCustomLyricVersion] = useState(0);
 	const [desktopLyricsEnabled, setDesktopLyricsEnabled] = useState(false);
 	const [updateModalOpen, setUpdateModalOpen] = useState(false);
+	const [collectTarget, setCollectTarget] = useState<Track | null>(null);
+	const [collectBusyPlaylistId, setCollectBusyPlaylistId] = useState<string | null>(null);
 
 	const currentTrack = usePlaybackStore((s) => s.currentTrack);
 	const queue = usePlaybackStore((s) => s.queue);
@@ -271,11 +280,11 @@ export function App({ SplashComponent = SplashHost, VisualComponent = VisualEngi
 	const originalLyricsPayloadRef = useRef(lyricsPayload);
 
 	const initSidecar = useCallback((cfg: RuntimeConfig) => {
-		const client = new SidecarClient(cfg.sidecarBaseUrl);
+		const client = createSidecarClient(cfg);
 		setSidecarClient(client);
 		setSidecarBaseUrl(cfg.sidecarBaseUrl);
 		return client;
-	}, []);
+	}, [createSidecarClient]);
 
 	const emptyHomeCoreAllowed = shouldShowEmptyHome({
 		splashActive: false,
@@ -484,6 +493,10 @@ export function App({ SplashComponent = SplashHost, VisualComponent = VisualEngi
 
 	const providerLabel = useCallback((provider: ProviderId) => provider === "netease" ? "网易云" : "QQ 音乐", []);
 
+	const writableCollectPlaylists = collectTarget
+		? shelfPlaylists.filter((playlist) => playlist.provider === collectTarget.provider && playlist.subscribed !== true)
+		: [];
+
 	const refreshShelfPlaylists = useCallback(async (client: SidecarClient | null) => {
 		if (!client) {
 			setShelfPlaylists([]);
@@ -529,6 +542,57 @@ export function App({ SplashComponent = SplashHost, VisualComponent = VisualEngi
 		openLoginModal();
 		showToast("登录后同步歌单库");
 	}, [neteaseStatus?.loggedIn, openLoginModal, qqStatus?.loggedIn, searchQuery, showToast]);
+
+	const openCollectPicker = useCallback((track: Track) => {
+		if (track.provider !== "netease") {
+			showToast(track.provider === "qq" ? "QQ 音乐收藏到歌单待接口接入" : "当前来源暂不支持收藏到歌单");
+			return;
+		}
+		if (!sidecarClient) {
+			showToast("sidecar 未连接，稍后再试");
+			return;
+		}
+		setCollectTarget(track);
+		setCollectBusyPlaylistId(null);
+		void refreshShelfPlaylists(sidecarClient);
+	}, [refreshShelfPlaylists, showToast, sidecarClient]);
+
+	const openCollectPickerForCurrent = useCallback(() => {
+		const track = usePlaybackStore.getState().currentTrack;
+		if (!track) {
+			showToast("先播放或选择一首歌");
+			return;
+		}
+		openCollectPicker(track);
+	}, [openCollectPicker, showToast]);
+
+	const closeCollectPicker = useCallback(() => {
+		if (collectBusyPlaylistId) return;
+		setCollectTarget(null);
+	}, [collectBusyPlaylistId]);
+
+	const addCollectTargetToPlaylist = useCallback(async (playlistId: string) => {
+		const client = sidecarClient;
+		const track = collectTarget;
+		if (!client || !track || !playlistId || collectBusyPlaylistId) return;
+		setCollectBusyPlaylistId(playlistId);
+		showToast("正在收藏到歌单...");
+		try {
+			await client.addSongToPlaylist(track.provider, playlistId, track.id);
+			showToast("已收藏到歌单");
+			setCollectTarget(null);
+			void refreshShelfPlaylists(client);
+		} catch (e) {
+			const message = e instanceof SidecarClientError && e.code === "LOGIN_REQUIRED"
+				? "登录后可同步到网易云"
+				: e instanceof Error
+					? e.message
+					: "收藏失败";
+			showToast(message);
+		} finally {
+			setCollectBusyPlaylistId(null);
+		}
+	}, [collectBusyPlaylistId, collectTarget, refreshShelfPlaylists, showToast, sidecarClient]);
 
 	const closeLoginModal = useCallback(() => {
 		setLoginModalOpen(false);
@@ -881,10 +945,13 @@ export function App({ SplashComponent = SplashHost, VisualComponent = VisualEngi
 
 		async function boot(): Promise<void> {
 			let cfg: RuntimeConfig;
-			try {
-				cfg = await getRuntimeConfig();
-			} catch {
-				cfg = placeholderRuntimeConfig();
+			if (initialRuntimeConfig) cfg = initialRuntimeConfig;
+			else {
+				try {
+					cfg = await getRuntimeConfig();
+				} catch {
+					cfg = placeholderRuntimeConfig();
+				}
 			}
 			if (cancelledRef.current) return;
 
@@ -934,7 +1001,7 @@ export function App({ SplashComponent = SplashHost, VisualComponent = VisualEngi
 			cancelledRef.current = true;
 			if (timer) clearTimeout(timer);
 		};
-	}, [initSidecar, refreshShelfPlaylists, setMatrix]);
+	}, [initSidecar, initialRuntimeConfig, refreshShelfPlaylists, setMatrix]);
 
 	useEffect(() => {
 		if (!audioElementSupported()) return;
@@ -1074,6 +1141,11 @@ export function App({ SplashComponent = SplashHost, VisualComponent = VisualEngi
 				onShelfModeChange={updateShelfMode}
 				onShelfPlayQueueIndex={(index) => usePlaybackStore.getState().playAt(index)}
 				onShelfDetailRowClick={(payload) => {
+					if (payload.action === "collect") {
+						const track = mapShelfDetailRowToTrack(payload.row);
+						if (track) openCollectPicker(track);
+						return;
+					}
 					void handleShelfDetailRowAction({
 						...payload,
 						client: sidecarClient,
@@ -1133,6 +1205,7 @@ export function App({ SplashComponent = SplashHost, VisualComponent = VisualEngi
 					else applyOriginalLyrics();
 				}}
 				onOpenCustomLyrics={openCustomLyricModal}
+				onCollectCurrent={openCollectPickerForCurrent}
 				onClose={() => {
 					setConsole(false);
 					setMiniQueue(false);
@@ -1197,6 +1270,44 @@ export function App({ SplashComponent = SplashHost, VisualComponent = VisualEngi
 							<button className="modal-btn" type="button" onClick={deleteCustomLyric}>删除</button>
 							<button className="modal-btn" type="button" onClick={() => setCustomLyricModalOpen(false)}>关闭</button>
 							<button id="custom-lyric-save" className="modal-btn primary" type="button" onClick={saveCustomLyric}>保存使用</button>
+						</div>
+					</div>
+				</div>
+			) : null}
+			{collectTarget ? (
+				<div id="collect-modal" className="modal-mask show" role="presentation" onClick={(event) => {
+					if (event.target === event.currentTarget) closeCollectPicker();
+				}}>
+					<div className="modal collect-modal" role="dialog" aria-modal="true" aria-labelledby="collect-modal-title">
+						<h2 id="collect-modal-title">收藏到歌单</h2>
+						<div id="collect-current" className="collect-current">
+							{collectTarget.coverUrl ? <img src={collectTarget.coverUrl} alt="" /> : <div className="cover-placeholder" />}
+							<div className="collect-current-meta">
+								<div className="collect-title">{collectTarget.title}</div>
+								<div className="collect-sub">{collectTarget.artists.join(" / ")}</div>
+							</div>
+						</div>
+						<div id="collect-list" className="collect-list">
+							{writableCollectPlaylists.length > 0 ? writableCollectPlaylists.map((playlist) => (
+								<button
+									key={`${playlist.provider}:${playlist.id}`}
+									type="button"
+									className={collectBusyPlaylistId === playlist.id ? "collect-item busy" : "collect-item"}
+									data-collect-pid={playlist.id}
+									onClick={() => void addCollectTargetToPlaylist(playlist.id)}
+								>
+									{playlist.coverUrl ? <img src={playlist.coverUrl} alt="" /> : <div className="cover-placeholder" />}
+									<div className="collect-current-meta">
+										<div className="collect-title">{playlist.name}</div>
+										<div className="collect-sub">{playlist.trackCount ?? 0} 首</div>
+									</div>
+								</button>
+							)) : (
+								<div className="collect-empty">还没有可写入的歌单</div>
+							)}
+						</div>
+						<div className="btn-row">
+							<button className="modal-btn" type="button" onClick={closeCollectPicker}>关闭</button>
 						</div>
 					</div>
 				</div>

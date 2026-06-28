@@ -11,10 +11,12 @@ import {
 	shouldShowEmptyHome,
 } from "./App";
 import type { SplashHostProps } from "../visual/SplashHost";
-import type { SidecarStatus } from "../tauri/runtime";
+import type { SidecarStatus, RuntimeConfig } from "../tauri/runtime";
 import { useLyricsStore } from "../stores/lyrics-store";
 import { usePlaybackStore } from "../stores/playback-store";
 import { CUSTOM_LYRIC_PREF_STORE_KEY, CUSTOM_LYRIC_STORE_KEY } from "../lyrics/custom-lyrics";
+import type { SidecarClient } from "../api/sidecar-client";
+import type { VisualEngineHostProps } from "../visual/VisualEngineHost";
 
 test("App keeps the empty-home music page mounted behind the splash gate", () => {
 	const html = renderToStaticMarkup(React.createElement(App));
@@ -225,5 +227,87 @@ test("App custom lyric modal saves text and applies custom lyrics to current tra
 	host.remove();
 	usePlaybackStore.getState().clearQueue();
 	useLyricsStore.getState().reset();
+	localStorage.clear();
+});
+
+test("App opens the baseline collect picker for shelf detail collect and adds only after a playlist is chosen", async () => {
+	await import("../../../../packages/visual-engine/src/runtime/happy-dom-preload");
+	(globalThis as unknown as { localStorage: Storage }).localStorage = window.localStorage;
+	localStorage.clear();
+	usePlaybackStore.getState().clearQueue();
+
+	const added: unknown[] = [];
+	const fakeClient = {
+		async playlistList(provider: string) {
+			if (provider === "netease") {
+				return [
+					{ provider: "netease", id: "mine-1", name: "我的歌单", coverUrl: "mine.jpg", trackCount: 12, trackIds: [] },
+					{ provider: "netease", id: "sub-1", name: "收藏来的歌单", coverUrl: "", trackCount: 4, trackIds: [], subscribed: true },
+				];
+			}
+			return [
+				{ provider: "qq", id: "qq-1", name: "QQ 收藏", coverUrl: "", trackCount: 2, trackIds: [] },
+			];
+		},
+		async addSongToPlaylist(provider: string, playlistId: string, trackId: string) {
+			added.push({ provider, playlistId, trackId });
+			return { provider, playlistId, trackId, code: 200 };
+		},
+	} as unknown as SidecarClient;
+
+	let triggerCollect: (() => void) | null = null;
+	function MockVisual(props: VisualEngineHostProps) {
+		triggerCollect = () => props.onShelfDetailRowClick?.({
+			index: 0,
+			action: "collect",
+			row: {
+				id: "song-1",
+				name: "First Song",
+				artist: "Alice",
+				cover: "cover.jpg",
+				provider: "netease",
+				type: "playable",
+				sourceId: "song-1",
+				title: "First Song",
+				artists: ["Alice"],
+				album: "",
+				coverUrl: "cover.jpg",
+				playableState: "playable",
+				qualityHints: [],
+			},
+		});
+		return <div id="visual-host" />;
+	}
+	const rootConfig: RuntimeConfig = {
+		sidecarBaseUrl: "http://127.0.0.1:39999",
+		appDataDir: "",
+		appVersion: "0.0.0-test",
+		schemaVersion: "0.1.0",
+		updaterPublicKeyConfigured: false,
+	};
+	const host = document.createElement("div");
+	document.body.appendChild(host);
+	const root = createRoot(host);
+	flushSync(() => root.render(<App SplashComponent={() => null} VisualComponent={MockVisual} createSidecarClient={() => fakeClient} initialRuntimeConfig={rootConfig} />));
+	await new Promise((resolve) => setTimeout(resolve, 0));
+
+	flushSync(() => triggerCollect?.());
+	await new Promise((resolve) => setTimeout(resolve, 0));
+
+	expect(host.querySelector("#collect-modal.show")).not.toBeNull();
+	expect(host.querySelector("#collect-current")?.textContent).toContain("First Song");
+	expect(host.querySelector("#collect-list")?.textContent).toContain("我的歌单");
+	expect(host.querySelector("#collect-list")?.textContent).not.toContain("收藏来的歌单");
+	expect(host.querySelector("#collect-list")?.textContent).not.toContain("QQ 收藏");
+	expect(added).toEqual([]);
+
+	(host.querySelector('[data-collect-pid="mine-1"]') as HTMLButtonElement).click();
+	await new Promise((resolve) => setTimeout(resolve, 0));
+
+	expect(added).toEqual([{ provider: "netease", playlistId: "mine-1", trackId: "song-1" }]);
+	expect(host.querySelector("#collect-modal.show")).toBeNull();
+
+	root.unmount();
+	host.remove();
 	localStorage.clear();
 });

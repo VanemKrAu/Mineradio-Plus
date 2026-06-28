@@ -164,6 +164,7 @@ test("mapHanaPlaylistToSummary maps id/name/cover/trackCount/trackIds", () => {
     name: "pl",
     coverImgUrl: "c",
     trackCount: 5,
+    subscribed: true,
     trackIds: [{ id: 1 }, { id: "2" }, 3]
   });
   expect(s.provider).toBe("netease");
@@ -175,6 +176,7 @@ test("mapHanaPlaylistToSummary maps id/name/cover/trackCount/trackIds", () => {
   expect(s.trackIds[0]).toBe("1");
   expect(s.trackIds[1]).toBe("2");
   expect(s.trackIds[2]).toBe("3");
+  expect(s.subscribed).toBe(true);
 });
 
 test("mapHanaPlaylistToDetail maps tracks via mapHanaSongToTrack", () => {

@@ -434,7 +434,8 @@ test("GET /providers/netease/playlists calls adapter and returns playlist summar
           name: "我的歌单",
           coverUrl: "http://cover",
           trackCount: 2,
-          trackIds: ["1", "2"]
+          trackIds: ["1", "2"],
+          subscribed: false
         }
       ];
     }

@@ -168,7 +168,8 @@ export function mapQqPlaylistToSummary(
       typeof raw?.songnum === "number" ? raw.songnum :
       typeof raw?.song_count === "number" ? raw.song_count :
       undefined,
-    trackIds
+    trackIds,
+    subscribed: false
   };
 }
 
@@ -184,6 +185,7 @@ export function mapQqPlaylistToDetail(
       coverUrl: "",
       trackCount: undefined,
       trackIds: [],
+      subscribed: false,
       tracks: []
     };
   }

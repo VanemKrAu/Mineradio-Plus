@@ -70,6 +70,7 @@ test("resolveShelfItems prefers provider playlists over queue fallback for the 3
 			coverUrl: "cover-like",
 			trackCount: 12,
 			trackIds: [],
+			subscribed: false,
 		},
 		{
 			provider: "qq",
@@ -78,6 +79,7 @@ test("resolveShelfItems prefers provider playlists over queue fallback for the 3
 			coverUrl: "cover-qq",
 			trackCount: 3,
 			trackIds: [],
+			subscribed: true,
 		},
 	];
 	const queue = [track("a", "Queued", ["Ada"], "Album", "cover-q")];

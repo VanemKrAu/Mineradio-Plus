@@ -15,6 +15,7 @@ export interface BottomControlsHostProps {
 	onLyrics?: () => void;
 	onLyricSourceChange?: (mode: "original" | "custom") => void;
 	onOpenCustomLyrics?: () => void;
+	onCollectCurrent?: () => void;
 	onClose?: () => void;
 	onNotice?: (message: string) => void;
 	onSeek?: (positionMs: number) => void;
@@ -75,6 +76,7 @@ export function BottomControlsHost(props: BottomControlsHostProps): ReactElement
 				onLyrics={props.onLyrics}
 				onLyricSourceChange={props.onLyricSourceChange}
 				onOpenCustomLyrics={props.onOpenCustomLyrics}
+				onCollectCurrent={props.onCollectCurrent}
 				onClose={props.onClose}
 				onNotice={props.onNotice}
 				onSeek={props.onSeek}

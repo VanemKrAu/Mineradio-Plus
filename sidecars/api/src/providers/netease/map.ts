@@ -23,6 +23,7 @@ export interface HanaPlaylistBody {
   trackCount?: number;
   trackIds?: Array<{ id?: number | string } | number | string>;
   tracks?: HanaSong[];
+  subscribed?: boolean;
 }
 
 export function mapPlayable(
@@ -225,7 +226,8 @@ export function mapHanaPlaylistToSummary(
     name: raw?.name ?? "",
     coverUrl: raw?.coverImgUrl ?? "",
     trackCount: typeof raw?.trackCount === "number" ? raw.trackCount : undefined,
-    trackIds
+    trackIds,
+    subscribed: raw?.subscribed === true
   };
 }
 
@@ -241,6 +243,7 @@ export function mapHanaPlaylistToDetail(
       coverUrl: "",
       trackCount: undefined,
       trackIds: [],
+      subscribed: false,
       tracks: []
     };
   }

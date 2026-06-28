@@ -103,3 +103,22 @@ test("PlayerConsoleHost renders shelf mode controls and emits baseline setting c
 	root.unmount();
 	container.remove();
 });
+
+test("PlayerConsoleHost routes the collect button to the baseline collect picker callback", async () => {
+	await import("../../../../packages/visual-engine/src/runtime/happy-dom-preload");
+	let opened = 0;
+	const container = document.createElement("div");
+	document.body.appendChild(container);
+	const root = createRoot(container);
+	root.render(
+		React.createElement(PlayerConsoleHost, {
+			onCollectCurrent: () => { opened += 1; },
+		}),
+	);
+	await new Promise((resolve) => setTimeout(resolve, 0));
+
+	(container.querySelector("#collect-btn") as HTMLButtonElement).click();
+	expect(opened).toBe(1);
+	root.unmount();
+	container.remove();
+});

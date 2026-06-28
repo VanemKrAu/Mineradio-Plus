@@ -16,6 +16,7 @@ function makeDetail(): PlaylistDetail {
 		name: "Daily Mix",
 		coverUrl: "cover.jpg",
 		trackIds: [],
+		subscribed: false,
 		tracks: [
 			{
 				provider: "netease",

@@ -2005,6 +2005,122 @@ html.control-glass-svg-ok #bottom-bar.visible {
   max-width: min(760px, 92vw);
 }
 
+.collect-modal {
+  width: min(430px, 90vw);
+  max-width: min(430px, 90vw);
+  padding: 28px;
+  text-align: left;
+}
+
+.collect-modal h2 {
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+.collect-current {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, .07);
+  background: rgba(255, 255, 255, .035);
+  margin-bottom: 14px;
+}
+
+.collect-current img,
+.collect-current .cover-placeholder {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: rgba(255, 255, 255, .07);
+  flex-shrink: 0;
+}
+
+.collect-current-meta {
+  min-width: 0;
+}
+
+.collect-title {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, .92);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.collect-sub {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, .42);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.collect-list {
+  max-height: min(300px, 45vh);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-right: 2px;
+}
+
+.collect-list::-webkit-scrollbar {
+  width: 3px;
+}
+
+.collect-list::-webkit-scrollbar-thumb {
+  background: rgba(244, 210, 138, .24);
+  border-radius: 3px;
+}
+
+.collect-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px;
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, .055);
+  background: rgba(255, 255, 255, .032);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: all .18s;
+  font-family: inherit;
+}
+
+.collect-item:hover {
+  background: rgba(244, 210, 138, .10);
+  border-color: rgba(244, 210, 138, .24);
+  transform: translateY(-1px);
+}
+
+.collect-item.busy {
+  opacity: .58;
+  pointer-events: none;
+}
+
+.collect-item img,
+.collect-item .cover-placeholder {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: rgba(255, 255, 255, .07);
+  flex-shrink: 0;
+}
+
+.collect-empty {
+  padding: 18px 8px;
+  text-align: center;
+  color: rgba(255, 255, 255, .38);
+  font-size: 11.5px;
+}
+
 .modal h2 {
   font-size: 18px;
   font-weight: 500;

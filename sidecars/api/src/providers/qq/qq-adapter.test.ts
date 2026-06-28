@@ -328,10 +328,12 @@ test("playlistList merges created and collected QQ playlists, filters qzone, and
     name: "我喜欢",
     coverUrl: "http://cover/like.jpg",
     trackCount: 8,
-    trackIds: []
+    trackIds: [],
+    subscribed: false
   });
   expect(out[1].id).toBe("301");
   expect(out[1].name).toBe("收藏歌单");
+  expect(out[1].subscribed).toBe(true);
 });
 
 test("playlistDetail maps body.cdlist[0] into PlaylistDetail", async () => {

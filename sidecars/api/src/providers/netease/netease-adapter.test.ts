@@ -334,7 +334,8 @@ test("playlistList uses logged-in user id and maps userPlaylist payload", async 
     name: "我喜欢的音乐",
     coverUrl: "http://cover/like.jpg",
     trackCount: 12,
-    trackIds: ["1", "2"]
+    trackIds: ["1", "2"],
+    subscribed: false
   });
   expect(out[1].id).toBe("102");
 });

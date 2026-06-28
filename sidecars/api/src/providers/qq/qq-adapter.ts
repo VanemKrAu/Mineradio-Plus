@@ -174,10 +174,10 @@ function isQzoneBackgroundPlaylist(pl: PlaylistSummary, raw: unknown): boolean {
   return /qzone|空间|背景音乐/i.test(text);
 }
 
-function mapQqUserPlaylists(rawList: unknown[], seen: Set<string>): PlaylistSummary[] {
+function mapQqUserPlaylists(rawList: unknown[], seen: Set<string>, subscribed = false): PlaylistSummary[] {
   const out: PlaylistSummary[] = [];
   for (const raw of rawList) {
-    const summary = mapQqPlaylistToSummary(raw as QqPlaylistBody);
+    const summary = { ...mapQqPlaylistToSummary(raw as QqPlaylistBody), subscribed };
     if (!summary.id || !summary.name || seen.has(summary.id)) continue;
     if (isQzoneBackgroundPlaylist(summary, raw)) continue;
     seen.add(summary.id);
@@ -290,10 +290,10 @@ export function createQqAdapter(
       ]);
       const seen = new Set<string>();
       const created = createdRaw.status === "fulfilled"
-        ? mapQqUserPlaylists(readQqPlaylistList(createdRaw.value.body), seen)
+        ? mapQqUserPlaylists(readQqPlaylistList(createdRaw.value.body), seen, false)
         : [];
       const collected = collectedRaw.status === "fulfilled"
-        ? mapQqUserPlaylists(readQqPlaylistList(collectedRaw.value.body), seen)
+        ? mapQqUserPlaylists(readQqPlaylistList(collectedRaw.value.body), seen, true)
         : [];
       return created.concat(collected).sort((a, b) => Number(isQqFavoritePlaylist(b)) - Number(isQqFavoritePlaylist(a)));
     },
