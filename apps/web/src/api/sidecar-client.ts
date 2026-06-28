@@ -9,6 +9,8 @@ import {
 	PlaylistDetailSchema,
 	PlaylistSummary,
 	PlaylistSummaryArraySchema,
+	PlaylistAddSongAck,
+	PlaylistAddSongAckSchema,
 	ProviderId,
 	ProviderSessionCookieAck,
 	ProviderSessionCookieAckSchema,
@@ -16,6 +18,10 @@ import {
 	ProviderLoginStatusSchema,
 	ProviderLogoutAck,
 	ProviderLogoutAckSchema,
+	SongLikeAck,
+	SongLikeAckSchema,
+	SongLikeCheckAck,
+	SongLikeCheckAckSchema,
 	SongUrlResultSchema,
 	type PlaybackQuality,
 	TrackArraySchema,
@@ -234,6 +240,33 @@ export class SidecarClient {
 			"GET",
 			`/providers/${provider}/playlists`,
 			PlaylistSummaryArraySchema,
+		);
+	}
+
+	async likeSong(provider: ProviderId, id: string, liked: boolean): Promise<SongLikeAck> {
+		return this.request(
+			"POST",
+			`/providers/${provider}/like`,
+			SongLikeAckSchema,
+			{ id, liked },
+		);
+	}
+
+	async checkSongLikes(provider: ProviderId, ids: string[]): Promise<SongLikeCheckAck> {
+		const params = new URLSearchParams({ ids: ids.join(",") });
+		return this.request(
+			"GET",
+			`/providers/${provider}/like-check?${params.toString()}`,
+			SongLikeCheckAckSchema,
+		);
+	}
+
+	async addSongToPlaylist(provider: ProviderId, playlistId: string, trackId: string): Promise<PlaylistAddSongAck> {
+		return this.request(
+			"POST",
+			`/providers/${provider}/playlists/add-song`,
+			PlaylistAddSongAckSchema,
+			{ playlistId, trackId },
 		);
 	}
 

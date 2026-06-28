@@ -9,6 +9,17 @@ import { usePlaybackStore } from "../stores/playback-store";
 import { isPlayable, playSearchResult } from "../components/search/play-search-result";
 import type { ShelfDetailRowClickPayload } from "./shelf-pointer-interactions";
 
+export interface ShelfDetailMutationClient {
+	likeSong?(provider: ProviderId, id: string, liked: boolean): Promise<unknown>;
+	addSongToPlaylist?(provider: ProviderId, playlistId: string, trackId: string): Promise<unknown>;
+}
+
+export interface ShelfDetailRowActionPayload extends ShelfDetailRowClickPayload {
+	client?: ShelfDetailMutationClient | null;
+	isLiked?: (track: Track) => boolean;
+	onResult?: (message: string, tone?: "good" | "fail") => void;
+}
+
 export interface PlaylistDetailClient {
 	playlistDetail(provider: ProviderId, id: string): Promise<PlaylistDetail>;
 }
@@ -82,12 +93,28 @@ export function playShelfDetailRow(payload: ShelfDetailRowClickPayload): boolean
 	return true;
 }
 
-export function handleShelfDetailRowAction(payload: ShelfDetailRowClickPayload): boolean {
+export async function handleShelfDetailRowAction(payload: ShelfDetailRowActionPayload): Promise<boolean> {
 	const action = payload.action ?? "row";
-	if (action === "like" || action === "collect") return false;
+	if (action === "collect") return false;
 
 	const track = mapShelfDetailRowToTrack(payload.row);
 	if (!track || !isPlayable(track.playableState)) return false;
+
+	if (action === "like") {
+		if (track.provider !== "netease" || !payload.client?.likeSong) {
+			payload.onResult?.("当前来源暂不支持红心同步", "fail");
+			return false;
+		}
+		const liked = !(payload.isLiked?.(track) ?? false);
+		try {
+			await payload.client.likeSong(track.provider, track.id, liked);
+			payload.onResult?.(liked ? "已加入红心喜欢" : "已取消红心", "good");
+			return true;
+		} catch {
+			payload.onResult?.("红心操作失败", "fail");
+			return false;
+		}
+	}
 
 	if (action === "next") {
 		usePlaybackStore.getState().insertNext(track);

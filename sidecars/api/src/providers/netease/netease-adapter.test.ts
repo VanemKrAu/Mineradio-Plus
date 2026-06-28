@@ -42,11 +42,16 @@ function noopDeps(overrides: Partial<NeteaseHanaDeps>): NeteaseHanaDeps {
     songUrlV1: call,
     lyric: call,
     lyricNew: call,
-    playlistDetail: call,
-    playlistCatlist: call,
-    userPlaylist: call,
-    loginStatus: call,
-    logout: call,
+	    playlistDetail: call,
+	    playlistCatlist: call,
+	    userPlaylist: call,
+	    like: call,
+	    songLikeCheck: call,
+	    likelist: call,
+	    playlistTracks: call,
+	    playlistTrackAdd: call,
+	    loginStatus: call,
+	    logout: call,
     getConfig: () => ({}),
     ...overrides
   };
@@ -332,4 +337,105 @@ test("playlistList uses logged-in user id and maps userPlaylist payload", async 
     trackIds: ["1", "2"]
   });
   expect(out[1].id).toBe("102");
+});
+
+test("likeSong requires a cookie and calls hana like with baseline string boolean", async () => {
+	  let query: Record<string, unknown> = {};
+  let cfg: { cookie?: string } | undefined;
+  const adapter = createNeteaseAdapter(noopDeps({
+    getConfig: () => ({ cookie: "MUSIC_U=demo" }),
+    like: async (q, c) => {
+      query = q;
+      cfg = c;
+      return { body: { code: 200 } };
+    }
+  }));
+
+  const ack = await adapter.likeSong("100", true);
+
+	  expect(query.id).toBe("100");
+	  expect(query.like).toBe("true");
+	  expect(typeof query.timestamp).toBe("number");
+  expect(cfg).toEqual({ cookie: "MUSIC_U=demo" });
+  expect(ack).toEqual({ provider: "netease", id: "100", liked: true, code: 200 });
+});
+
+test("likeSong without cookie throws LOGIN_REQUIRED before hana call", async () => {
+  let calls = 0;
+  const adapter = createNeteaseAdapter(noopDeps({
+    getConfig: () => ({}),
+    like: async () => { calls++; return { body: {} }; }
+  }));
+
+  let err: unknown = null;
+  try {
+    await adapter.likeSong("100", true);
+  } catch (e) {
+    err = e;
+  }
+
+  expect(calls).toBe(0);
+  expect(err).toBeInstanceOf(ProviderError);
+  expect((err as ProviderError).code).toBe("LOGIN_REQUIRED");
+});
+
+test("checkSongLikes prefers songLikeCheck and falls back to likelist by logged-in user id", async () => {
+  const directQueries: Record<string, unknown>[] = [];
+  const adapter = createNeteaseAdapter(noopDeps({
+    getConfig: () => ({ cookie: "MUSIC_U=demo" }),
+    loginStatus: async () => ({
+      body: { data: { profile: { userId: 42, nickname: "n" } } }
+    }),
+    songLikeCheck: async (q) => {
+      directQueries.push(q);
+      return { body: { data: ["100"] } };
+    },
+    likelist: async () => {
+      throw new Error("should not fallback when direct check returns data");
+    }
+  }));
+
+  const direct = await adapter.checkSongLikes(["100", "200"]);
+  expect(directQueries[0].ids).toBe("[100,200]");
+  expect(direct.liked).toEqual({ "100": true, "200": false });
+
+  const fallbackAdapter = createNeteaseAdapter(noopDeps({
+    getConfig: () => ({ cookie: "MUSIC_U=demo" }),
+    loginStatus: async () => ({
+      body: { data: { profile: { userId: 42, nickname: "n" } } }
+    }),
+    songLikeCheck: async () => ({ body: { data: [] } }),
+    likelist: async (q) => {
+      expect(q.uid).toBe("42");
+      return { body: { ids: [200] } };
+    }
+  }));
+  const fallback = await fallbackAdapter.checkSongLikes(["100", "200"]);
+  expect(fallback.liked).toEqual({ "100": false, "200": true });
+});
+
+test("addSongToPlaylist calls playlistTracks and falls back to playlistTrackAdd", async () => {
+  const attempts: string[] = [];
+  const adapter = createNeteaseAdapter(noopDeps({
+    getConfig: () => ({ cookie: "MUSIC_U=demo" }),
+    playlistTracks: async (q) => {
+      attempts.push(`tracks:${q.op}:${q.pid}:${q.tracks}`);
+      return { body: { code: 500, message: "failed" } };
+    },
+    playlistTrackAdd: async (q) => {
+      attempts.push(`trackAdd:${q.pid}:${q.ids}`);
+      return { body: { code: 200 } };
+    }
+  }));
+
+  const ack = await adapter.addSongToPlaylist("p1", "100");
+
+  expect(attempts).toEqual(["tracks:add:p1:100", "trackAdd:p1:100"]);
+  expect(ack).toEqual({
+    provider: "netease",
+    playlistId: "p1",
+    trackId: "100",
+    success: true,
+    code: 200
+  });
 });

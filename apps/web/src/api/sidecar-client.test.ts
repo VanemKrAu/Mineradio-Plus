@@ -297,6 +297,64 @@ test("playlistList GETs provider playlists and parses playlist summaries", async
 	});
 });
 
+test("likeSong POSTs provider like mutation and parses ack", async () => {
+	let receivedBody: unknown = null;
+	const fake = (async (input: RequestInfo | URL, init?: RequestInit) => {
+		const url = typeof input === "string" ? input : input.toString();
+		expect(url).toContain("/providers/netease/like");
+		expect(init?.method).toBe("POST");
+		receivedBody = JSON.parse(String(init?.body ?? "{}"));
+		return jsonResponse({
+			ok: true,
+			data: { provider: "netease", id: "100", liked: true, code: 200 },
+		});
+	}) as typeof fetch;
+	await withFetch(fake, async () => {
+		const client = new SidecarClient(BASE);
+		const ack = await client.likeSong("netease", "100", true);
+		expect(receivedBody).toEqual({ id: "100", liked: true });
+		expect(ack).toEqual({ provider: "netease", id: "100", liked: true, code: 200 });
+	});
+});
+
+test("checkSongLikes GETs comma-separated ids and parses liked map", async () => {
+	const fake = (async (input: RequestInfo | URL, init?: RequestInit) => {
+		const url = typeof input === "string" ? input : input.toString();
+		expect(url).toContain("/providers/netease/like-check?ids=100%2C200");
+		expect(init?.method).toBe("GET");
+		return jsonResponse({
+			ok: true,
+			data: { provider: "netease", ids: ["100", "200"], liked: { "100": true, "200": false } },
+		});
+	}) as typeof fetch;
+	await withFetch(fake, async () => {
+		const client = new SidecarClient(BASE);
+		const ack = await client.checkSongLikes("netease", ["100", "200"]);
+		expect(ack.liked["100"]).toBe(true);
+		expect(ack.liked["200"]).toBe(false);
+	});
+});
+
+test("addSongToPlaylist POSTs playlist add mutation and parses ack", async () => {
+	let receivedBody: unknown = null;
+	const fake = (async (input: RequestInfo | URL, init?: RequestInit) => {
+		const url = typeof input === "string" ? input : input.toString();
+		expect(url).toContain("/providers/netease/playlists/add-song");
+		expect(init?.method).toBe("POST");
+		receivedBody = JSON.parse(String(init?.body ?? "{}"));
+		return jsonResponse({
+			ok: true,
+			data: { provider: "netease", playlistId: "p1", trackId: "100", success: true, code: 200 },
+		});
+	}) as typeof fetch;
+	await withFetch(fake, async () => {
+		const client = new SidecarClient(BASE);
+		const ack = await client.addSongToPlaylist("netease", "p1", "100");
+		expect(receivedBody).toEqual({ playlistId: "p1", trackId: "100" });
+		expect(ack.success).toBe(true);
+	});
+});
+
 test("setProviderSessionCookie POSTs cookie and accepts ack without retaining cookie", async () => {
 	let receivedBody: unknown = null;
 	const secret = "MUSIC_U=web-secret";

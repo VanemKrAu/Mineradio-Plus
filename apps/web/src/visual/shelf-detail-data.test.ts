@@ -125,41 +125,72 @@ test("playShelfDetailRow enqueues and plays valid rows while ignoring hard non-p
 	expect(usePlaybackStore.getState().currentTrack?.id).toBe("song-1");
 });
 
-test("handleShelfDetailRowAction inserts next rows after the current track without interrupting playback", () => {
+test("handleShelfDetailRowAction inserts next rows after the current track without interrupting playback", async () => {
 	resetPlaybackStore();
 	const rows = mapPlaylistDetailToShelfRows(makeDetail(), "netease");
 	const current = mapShelfDetailRowToTrack(rows[0]!)!;
 	usePlaybackStore.getState().setQueue([current]);
 	usePlaybackStore.getState().playAt(0);
 
-	expect(handleShelfDetailRowAction({ row: rows[1]!, index: 1, action: "next" })).toBe(false);
+	expect(await handleShelfDetailRowAction({ row: rows[1]!, index: 1, action: "next" })).toBe(false);
 	expect(usePlaybackStore.getState().queue.map((track) => track.id)).toEqual(["song-1"]);
 	expect(usePlaybackStore.getState().currentTrack?.id).toBe("song-1");
 
-	expect(handleShelfDetailRowAction({ row: rows[0]!, index: 0, action: "next" })).toBe(true);
+	expect(await handleShelfDetailRowAction({ row: rows[0]!, index: 0, action: "next" })).toBe(true);
 	expect(usePlaybackStore.getState().queue.map((track) => track.id)).toEqual(["song-1"]);
 	expect(usePlaybackStore.getState().currentTrack?.id).toBe("song-1");
 });
 
-test("handleShelfDetailRowAction plays explicit play and default row actions through search-result playback", () => {
+test("handleShelfDetailRowAction plays explicit play and default row actions through search-result playback", async () => {
 	resetPlaybackStore();
 	const row = mapPlaylistDetailToShelfRows(makeDetail(), "netease")[0]!;
 
-	expect(handleShelfDetailRowAction({ row, index: 0, action: "play" })).toBe(true);
+	expect(await handleShelfDetailRowAction({ row, index: 0, action: "play" })).toBe(true);
 	expect(usePlaybackStore.getState().currentTrack?.id).toBe("song-1");
 	expect(usePlaybackStore.getState().queue.map((track) => track.id)).toEqual(["song-1"]);
 
 	resetPlaybackStore();
-	expect(handleShelfDetailRowAction({ row, index: 0, action: "row" })).toBe(true);
+	expect(await handleShelfDetailRowAction({ row, index: 0, action: "row" })).toBe(true);
 	expect(usePlaybackStore.getState().currentTrack?.id).toBe("song-1");
 });
 
-test("handleShelfDetailRowAction exposes like and collect as routed but non-mutating actions until provider mutations exist", () => {
+test("handleShelfDetailRowAction routes Netease like action through provider mutation without changing playback", async () => {
+	resetPlaybackStore();
+	const row = mapPlaylistDetailToShelfRows(makeDetail(), "netease")[0]!;
+	const calls: unknown[] = [];
+
+	expect(await handleShelfDetailRowAction({
+		row,
+		index: 0,
+		action: "like",
+		client: {
+			async likeSong(provider, id, liked) {
+				calls.push({ provider, id, liked });
+				return { provider, id, liked, code: 200 };
+			},
+		},
+		isLiked: () => false,
+	})).toBe(true);
+
+	expect(calls).toEqual([{ provider: "netease", id: "song-1", liked: true }]);
+	expect(usePlaybackStore.getState().queue).toEqual([]);
+	expect(usePlaybackStore.getState().currentTrack).toBeNull();
+});
+
+test("handleShelfDetailRowAction keeps collect routed but non-mutating until playlist picker parity exists", async () => {
 	resetPlaybackStore();
 	const row = mapPlaylistDetailToShelfRows(makeDetail(), "netease")[0]!;
 
-	expect(handleShelfDetailRowAction({ row, index: 0, action: "like" })).toBe(false);
-	expect(handleShelfDetailRowAction({ row, index: 0, action: "collect" })).toBe(false);
+	expect(await handleShelfDetailRowAction({
+		row,
+		index: 0,
+		action: "collect",
+		client: {
+			async addSongToPlaylist() {
+				throw new Error("collect should wait for playlist picker parity");
+			},
+		},
+	})).toBe(false);
 	expect(usePlaybackStore.getState().queue).toEqual([]);
 	expect(usePlaybackStore.getState().currentTrack).toBeNull();
 });

@@ -2,7 +2,10 @@ import type {
   Track,
   PlaylistSummary,
   PlaylistDetail,
-  LyricPayload
+  LyricPayload,
+  SongLikeAck,
+  SongLikeCheckAck,
+  PlaylistAddSongAck
 } from "@mineradio/shared";
 import {
   ProviderError,
@@ -39,9 +42,20 @@ export interface NeteaseHanaDeps {
   playlistDetail: NeteaseHanaCall;
   playlistCatlist: NeteaseHanaCall;
   userPlaylist: NeteaseHanaCall;
+  like: NeteaseHanaCall;
+  songLikeCheck: NeteaseHanaCall;
+  likelist: NeteaseHanaCall;
+  playlistTracks: NeteaseHanaCall;
+  playlistTrackAdd: NeteaseHanaCall;
   loginStatus: NeteaseHanaCall;
   logout: NeteaseHanaCall;
   getConfig(): { cookie?: string };
+}
+
+export interface NeteaseAdapter extends ProviderAdapter {
+  likeSong(id: string, liked: boolean): Promise<SongLikeAck>;
+  checkSongLikes(ids: string[]): Promise<SongLikeCheckAck>;
+  addSongToPlaylist(playlistId: string, trackId: string): Promise<PlaylistAddSongAck>;
 }
 
 function cast(fn: unknown): NeteaseHanaCall {
@@ -57,6 +71,11 @@ const defaultDeps: NeteaseHanaDeps = {
   playlistDetail: cast(hanaClient.playlistDetail),
   playlistCatlist: cast(hanaClient.playlistCatlist),
   userPlaylist: cast(hanaClient.userPlaylist),
+  like: cast(hanaClient.like),
+  songLikeCheck: cast(hanaClient.songLikeCheck),
+  likelist: cast(hanaClient.likelist),
+  playlistTracks: cast(hanaClient.playlistTracks),
+  playlistTrackAdd: cast(hanaClient.playlistTrackAdd),
   loginStatus: cast(hanaClient.loginStatus),
   logout: cast(hanaClient.logout),
   getConfig
@@ -72,6 +91,19 @@ function asObj(v: unknown): Record<string, unknown> | null {
 function cfgOf(deps: NeteaseHanaDeps): { cookie?: string } {
   const cfg = deps.getConfig();
   return cfg.cookie ? { cookie: cfg.cookie } : {};
+}
+
+function requireCookie(deps: NeteaseHanaDeps, action: string): string {
+  const cookie = deps.getConfig().cookie;
+  if (!cookie) {
+    throw new ProviderError(
+      "netease",
+      "LOGIN_REQUIRED",
+      `netease ${action} requires login`,
+      { retryable: true, action: "login" }
+    );
+  }
+  return cookie;
 }
 
 async function loginStatusOf(deps: NeteaseHanaDeps): Promise<ProviderLoginStatus> {
@@ -111,9 +143,30 @@ function requestedQuality(opts?: SongUrlOptions) {
   return opts?.quality ?? "hires";
 }
 
+function responseCode(resp: { body: unknown } | unknown): number {
+  const outer = asObj(resp);
+  const body = outer && "body" in outer ? asObj(outer.body) : asObj(resp);
+  const raw = body?.code ?? outer?.code;
+  return typeof raw === "number" && Number.isFinite(raw) ? Math.floor(raw) : 200;
+}
+
+function isSuccessful(resp: { body: unknown } | unknown): boolean {
+  const code = responseCode(resp);
+  const outer = asObj(resp);
+  const body = outer && "body" in outer ? asObj(outer.body) : asObj(resp);
+  return code === 200 && !body?.error;
+}
+
+function likedRecord(ids: string[], likedIds: string[]): Record<string, boolean> {
+  const set = new Set(likedIds.map(String));
+  const liked: Record<string, boolean> = {};
+  for (const id of ids) liked[id] = set.has(id);
+  return liked;
+}
+
 export function createNeteaseAdapter(
   deps: NeteaseHanaDeps = defaultDeps
-): ProviderAdapter {
+): NeteaseAdapter {
   return {
     id: "netease",
     async search({ keyword, limit }): Promise<Track[]> {
@@ -230,6 +283,109 @@ export function createNeteaseAdapter(
         );
       }
       return mapHanaPlaylistToDetail(pl as unknown as HanaPlaylistBody, id);
+    },
+    async likeSong(id, liked): Promise<SongLikeAck> {
+      const cookie = requireCookie(deps, "like");
+      const resp = await deps.like(
+        { id, like: String(liked), timestamp: Date.now() },
+        { cookie }
+      );
+      return {
+        provider: "netease",
+        id,
+        liked,
+        code: responseCode(resp)
+      };
+    },
+    async checkSongLikes(ids): Promise<SongLikeCheckAck> {
+      const cookie = requireCookie(deps, "like-check");
+      const cleanIds = ids.map(String).filter(Boolean);
+      if (cleanIds.length === 0) {
+        return { provider: "netease", ids: [], liked: {} };
+      }
+
+      let likedIds: string[] = [];
+      try {
+        const numericIds = cleanIds.map(Number).filter(Number.isFinite);
+        const checked = await deps.songLikeCheck(
+          { ids: JSON.stringify(numericIds), timestamp: Date.now() },
+          { cookie }
+        );
+        const body = asObj(checked.body);
+        const data = body?.data ?? body?.ids ?? checked.body;
+        if (Array.isArray(data)) {
+          likedIds = data.map(String);
+        } else {
+          const dataObj = asObj(data);
+          if (dataObj) {
+            likedIds = cleanIds.filter((id) => !!(dataObj[id] ?? dataObj[String(Number(id))]));
+          }
+        }
+      } catch {
+        likedIds = [];
+      }
+
+      if (likedIds.length === 0) {
+        const status = await loginStatusOf(deps);
+        if (!status.loggedIn || !status.userId) {
+          throw new ProviderError("netease", "LOGIN_REQUIRED", "netease like-check requires login", {
+            retryable: true,
+            action: "login"
+          });
+        }
+        const resp = await deps.likelist(
+          { uid: status.userId, timestamp: Date.now() },
+          { cookie }
+        );
+        const body = asObj(resp.body);
+        const list = body && Array.isArray(body.ids) ? body.ids : [];
+        likedIds = list.map(String);
+      }
+
+      return {
+        provider: "netease",
+        ids: cleanIds,
+        liked: likedRecord(cleanIds, likedIds)
+      };
+    },
+    async addSongToPlaylist(playlistId, trackId): Promise<PlaylistAddSongAck> {
+      const cookie = requireCookie(deps, "playlist-add-song");
+      const primary = await deps.playlistTracks(
+        {
+          op: "add",
+          pid: playlistId,
+          tracks: trackId,
+          timestamp: Date.now()
+        },
+        { cookie }
+      );
+      let finalResp: { body: unknown } | unknown = primary;
+      if (!isSuccessful(primary)) {
+        finalResp = await deps.playlistTrackAdd(
+          {
+            pid: playlistId,
+            ids: trackId,
+            timestamp: Date.now()
+          },
+          { cookie }
+        );
+      }
+      const success = isSuccessful(finalResp);
+      if (!success) {
+        throw new ProviderError(
+          "netease",
+          "PLAYLIST_ADD_FAILED",
+          `netease playlist add failed for ${trackId}`,
+          { retryable: false }
+        );
+      }
+      return {
+        provider: "netease",
+        playlistId,
+        trackId,
+        success: true,
+        code: responseCode(finalResp)
+      };
     },
     async loginStatus(): Promise<ProviderLoginStatus> {
       return loginStatusOf(deps);

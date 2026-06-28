@@ -4,6 +4,9 @@ import {
   SongUrlRequestSchema,
   TrackSchema,
   ProviderSessionCookieAckSchema,
+  SongLikeAckSchema,
+  SongLikeCheckAckSchema,
+  PlaylistAddSongAckSchema,
   type CapabilityMatrix,
   type ProviderId,
   type Track
@@ -299,6 +302,74 @@ export function createRouteHandler(deps: RouteHandlerDeps = {}) {
           await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub });
           return response;
         }
+        if (sub === "like" && method === "POST") {
+          const body = await parseJsonBody(request);
+          const parsed = parseLikeBody(body);
+          if (!parsed) {
+            response = json(
+              fail({
+                code: "BAD_REQUEST",
+                message: "invalid or missing like body",
+                provider: providerId,
+                retryable: false
+              }),
+              400
+            );
+            await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub });
+            return response;
+          }
+          if (!adapter.likeSong) {
+            throw new ProviderNotImplementedError(providerId, "like");
+          }
+          response = json(ok(SongLikeAckSchema.parse(await adapter.likeSong(parsed.id, parsed.liked))));
+          await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub });
+          return response;
+        }
+        if (sub === "like-check" && method === "GET") {
+          const ids = parseIds(url.searchParams.get("ids") ?? url.searchParams.get("id") ?? "");
+          if (ids.length === 0) {
+            response = json(
+              fail({
+                code: "BAD_REQUEST",
+                message: "ids required",
+                provider: providerId,
+                retryable: false
+              }),
+              400
+            );
+            await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub });
+            return response;
+          }
+          if (!adapter.checkSongLikes) {
+            throw new ProviderNotImplementedError(providerId, "like-check");
+          }
+          response = json(ok(SongLikeCheckAckSchema.parse(await adapter.checkSongLikes(ids))));
+          await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub });
+          return response;
+        }
+        if (sub === "playlists/add-song" && method === "POST") {
+          const body = await parseJsonBody(request);
+          const parsed = parsePlaylistAddSongBody(body);
+          if (!parsed) {
+            response = json(
+              fail({
+                code: "BAD_REQUEST",
+                message: "invalid or missing playlist add body",
+                provider: providerId,
+                retryable: false
+              }),
+              400
+            );
+            await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub });
+            return response;
+          }
+          if (!adapter.addSongToPlaylist) {
+            throw new ProviderNotImplementedError(providerId, "playlist-add-song");
+          }
+          response = json(ok(PlaylistAddSongAckSchema.parse(await adapter.addSongToPlaylist(parsed.playlistId, parsed.trackId))));
+          await logRequest(logger, { method, path, status: response.status, startedAt, provider: providerId, action: sub });
+          return response;
+        }
         const detailMatch = sub.match(/^playlists\/(.+)$/);
         if (detailMatch && method === "GET") {
           const id = decodeURIComponent(detailMatch[1]);
@@ -345,6 +416,39 @@ export const routeHandler = createRouteHandler();
 function parseLimit(limitRaw: string | null): number {
   const limitParsed = limitRaw === null ? NaN : Number(limitRaw);
   return Number.isFinite(limitParsed) && limitParsed > 0 ? Math.floor(limitParsed) : 20;
+}
+
+function parseIds(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
+
+function parseLikeBody(body: unknown): { id: string; liked: boolean } | null {
+  if (!body || typeof body !== "object") return null;
+  const source = body as { id?: unknown; liked?: unknown; like?: unknown };
+  const id = typeof source.id === "string" ? source.id.trim() : "";
+  const likedRaw = source.liked ?? source.like;
+  if (!id || typeof likedRaw !== "boolean") return null;
+  return { id, liked: likedRaw };
+}
+
+function parsePlaylistAddSongBody(body: unknown): { playlistId: string; trackId: string } | null {
+  if (!body || typeof body !== "object") return null;
+  const source = body as { playlistId?: unknown; pid?: unknown; trackId?: unknown; id?: unknown };
+  const playlistId = typeof source.playlistId === "string"
+    ? source.playlistId.trim()
+    : typeof source.pid === "string"
+      ? source.pid.trim()
+      : "";
+  const trackId = typeof source.trackId === "string"
+    ? source.trackId.trim()
+    : typeof source.id === "string"
+      ? source.id.trim()
+      : "";
+  if (!playlistId || !trackId) return null;
+  return { playlistId, trackId };
 }
 
 function statusFromError(err: unknown): number {

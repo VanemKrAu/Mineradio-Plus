@@ -4,7 +4,10 @@ import type {
   PlaylistDetail,
   LyricPayload,
   ProviderId,
-  PlaybackQuality
+  PlaybackQuality,
+  SongLikeAck,
+  SongLikeCheckAck,
+  PlaylistAddSongAck
 } from "@mineradio/shared";
 
 export type ProviderLoginStatus = {
@@ -32,6 +35,9 @@ export interface ProviderAdapter {
   lyric(track: Track): Promise<LyricPayload>;
   playlistList(): Promise<PlaylistSummary[]>;
   playlistDetail(id: string): Promise<PlaylistDetail>;
+  likeSong?(id: string, liked: boolean): Promise<SongLikeAck>;
+  checkSongLikes?(ids: string[]): Promise<SongLikeCheckAck>;
+  addSongToPlaylist?(playlistId: string, trackId: string): Promise<PlaylistAddSongAck>;
   loginStatus(): Promise<ProviderLoginStatus>;
   logout(): Promise<void>;
 }

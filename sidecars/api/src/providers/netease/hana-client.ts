@@ -8,7 +8,12 @@ import {
   playlistCatlist,
   userPlaylist,
   loginStatus,
-  logout
+  logout,
+  like,
+  songLikeCheck,
+  likelist,
+  playlistTracks,
+  playlistTrackAdd
 } from "hana-music-api";
 import { getProviderCookie } from "../../services/auth-session";
 
@@ -32,5 +37,10 @@ export const hanaClient = {
   playlistCatlist,
   userPlaylist,
   loginStatus,
-  logout
+  logout,
+  like,
+  songLikeCheck,
+  likelist,
+  playlistTracks,
+  playlistTrackAdd
 } as const;

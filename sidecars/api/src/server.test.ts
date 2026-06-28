@@ -465,6 +465,78 @@ test("GET /providers/netease/playlists/123 calls adapter (not 501 NOT_IMPLEMENTE
   expect(r.status).not.toBe(501);
 });
 
+test("POST /providers/netease/like validates body and calls adapter", async () => {
+  const calls: unknown[] = [];
+  const fakeNetease: ProviderAdapter = {
+    ...providers.netease,
+    async likeSong(id, liked) {
+      calls.push({ id, liked });
+      return { provider: "netease", id, liked, code: 200 };
+    }
+  };
+  const handler = createRouteHandler({
+    providerAdapters: { ...providers, netease: fakeNetease }
+  });
+
+  const r = await handler(new Request("http://127.0.0.1/providers/netease/like", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id: "100", liked: true })
+  }));
+
+  expect(r.status).toBe(200);
+  expect(calls).toEqual([{ id: "100", liked: true }]);
+  expect(await body(r)).toEqual({ ok: true, data: { provider: "netease", id: "100", liked: true, code: 200 } });
+});
+
+test("GET /providers/netease/like-check validates ids and calls adapter", async () => {
+  const fakeNetease: ProviderAdapter = {
+    ...providers.netease,
+    async checkSongLikes(ids) {
+      expect(ids).toEqual(["100", "200"]);
+      return { provider: "netease", ids, liked: { "100": true, "200": false } };
+    }
+  };
+  const handler = createRouteHandler({
+    providerAdapters: { ...providers, netease: fakeNetease }
+  });
+
+  const r = await handler(new Request("http://127.0.0.1/providers/netease/like-check?ids=100,200"));
+
+  expect(r.status).toBe(200);
+  expect(await body(r)).toEqual({
+    ok: true,
+    data: { provider: "netease", ids: ["100", "200"], liked: { "100": true, "200": false } }
+  });
+});
+
+test("POST /providers/netease/playlists/add-song validates body and calls adapter", async () => {
+  const calls: unknown[] = [];
+  const fakeNetease: ProviderAdapter = {
+    ...providers.netease,
+    async addSongToPlaylist(playlistId, trackId) {
+      calls.push({ playlistId, trackId });
+      return { provider: "netease", playlistId, trackId, success: true, code: 200 };
+    }
+  };
+  const handler = createRouteHandler({
+    providerAdapters: { ...providers, netease: fakeNetease }
+  });
+
+  const r = await handler(new Request("http://127.0.0.1/providers/netease/playlists/add-song", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ playlistId: "p1", trackId: "100" })
+  }));
+
+  expect(r.status).toBe(200);
+  expect(calls).toEqual([{ playlistId: "p1", trackId: "100" }]);
+  expect(await body(r)).toEqual({
+    ok: true,
+    data: { provider: "netease", playlistId: "p1", trackId: "100", success: true, code: 200 }
+  });
+});
+
 test("POST /providers/netease/login-status (method mismatch) returns 404", async () => {
   const r = await call("/providers/netease/login-status", { method: "POST" });
   expect(r.status).toBe(404);

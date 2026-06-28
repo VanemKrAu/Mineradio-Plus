@@ -1073,7 +1073,14 @@ export function App({ SplashComponent = SplashHost, VisualComponent = VisualEngi
 				homeActive={emptyHomeActive}
 				onShelfModeChange={updateShelfMode}
 				onShelfPlayQueueIndex={(index) => usePlaybackStore.getState().playAt(index)}
-				onShelfDetailRowClick={handleShelfDetailRowAction}
+				onShelfDetailRowClick={(payload) => {
+					void handleShelfDetailRowAction({
+						...payload,
+						client: sidecarClient,
+						isLiked: () => false,
+						onResult: (message) => showToast(message),
+					});
+				}}
 				onShelfOpenDetailContent={(payload, contentList) => {
 					const loader = createShelfDetailContentLoader({
 						client: sidecarClient,
