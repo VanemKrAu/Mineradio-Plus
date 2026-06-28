@@ -176,6 +176,12 @@ export function attachShelfPointerInteractionWiring(
 		return isShelfWheelZone(event, opts.getViewportWidth(), opts.getViewportHeight());
 	};
 
+	const canUsePinnedWheelZone = (event: WheelEvent): boolean => {
+		if (opts.shelfManager.getMode() !== "side") return false;
+		if (!isShelfPinnedOpen()) return false;
+		return isShelfWheelZone(event, opts.getViewportWidth(), opts.getViewportHeight());
+	};
+
 	const pointerInfoFromEvent = (event: PointerEvent | MouseEvent): ShelfPointerRaycastInfo => {
 		const mode = opts.shelfManager.getMode();
 		const snapshot = opts.shelfManager.getSnapshot();
@@ -258,7 +264,12 @@ export function attachShelfPointerInteractionWiring(
 		const wheelEvent = event as WheelEvent;
 		if (!canStartInteraction(event)) return;
 		const hit = opts.getHit(pointerInfoFromEvent(wheelEvent));
-		if (!canUseWheelHit(hit) && !canForceWheelScroll(wheelEvent) && !canUsePreviewWheelZone(wheelEvent)) return;
+		if (
+			!canUseWheelHit(hit)
+			&& !canForceWheelScroll(wheelEvent)
+			&& !canUsePreviewWheelZone(wheelEvent)
+			&& !canUsePinnedWheelZone(wheelEvent)
+		) return;
 		wheelEvent.preventDefault();
 		wheelEvent.stopImmediatePropagation();
 		opts.shelfManager.scrollBy(wheelEvent.deltaY > 0 ? 1 : -1);

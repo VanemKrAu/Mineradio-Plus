@@ -1049,7 +1049,7 @@ test("attachShelfPointerInteractionWiring does not use preview wheel zone for si
 	expect(event.calls).toEqual([]);
 });
 
-test("attachShelfPointerInteractionWiring does not use preview wheel zone for side pinned normal wheel without card hit", () => {
+test("attachShelfPointerInteractionWiring lets side pinned normal wheel scroll inside baseline wheel zone without card hit", () => {
 	const target = new FakePointerTarget();
 	const scrolled: number[] = [];
 	const cleanup = attachShelfPointerInteractionWiring({
@@ -1085,8 +1085,91 @@ test("attachShelfPointerInteractionWiring does not use preview wheel zone for si
 	target.emit("wheel", event);
 	cleanup();
 
+	expect(scrolled).toEqual([1]);
+	expect(event.calls).toEqual(["preventDefault", "stopImmediatePropagation"]);
+});
+
+test("attachShelfPointerInteractionWiring ignores side pinned normal wheel outside baseline wheel zone without card hit", () => {
+	const target = new FakePointerTarget();
+	const scrolled: number[] = [];
+	const cleanup = attachShelfPointerInteractionWiring({
+		target,
+		shelfManager: makeShelfManagerMock({
+			getMode: () => "side",
+			getSnapshot: () => ({
+				...closedSnapshot(),
+				mode: "side" as const,
+				shelfVisibility: 0.02,
+				pinnedOpen: true,
+			}),
+			setSelectedIdx: () => {},
+			clearSelected: () => {},
+			getCenterIdx: () => 0,
+			scrollBy: (delta) => scrolled.push(delta),
+			openDetail: () => {},
+			getShelfPinnedOpen: () => true,
+			setShelfPinnedOpen: () => {},
+		}),
+		cinema: { setFocusZone: () => {} },
+		getHit: () => null,
+		getSplashActive: () => false,
+		getPortrait: () => false,
+		getWallpaperSafe: () => false,
+		getViewportWidth: () => 1200,
+		getViewportHeight: () => 900,
+		getShelfPresence: () => "auto",
+		getShelfPreviewActive: () => true,
+	});
+
+	const event = makeWheelEvent({ deltaY: 120, clientX: 900, clientY: 300 });
+	target.emit("wheel", event);
+	cleanup();
+
 	expect(scrolled).toEqual([]);
 	expect(event.calls).toEqual([]);
+});
+
+test("attachShelfPointerInteractionWiring applies portrait side pinned wheel-zone geometry", () => {
+	const target = new FakePointerTarget();
+	const scrolled: number[] = [];
+	const cleanup = attachShelfPointerInteractionWiring({
+		target,
+		shelfManager: makeShelfManagerMock({
+			getMode: () => "side",
+			getSnapshot: () => ({
+				...closedSnapshot(),
+				mode: "side" as const,
+				shelfVisibility: 0.02,
+				pinnedOpen: true,
+			}),
+			setSelectedIdx: () => {},
+			clearSelected: () => {},
+			getCenterIdx: () => 0,
+			scrollBy: (delta) => scrolled.push(delta),
+			openDetail: () => {},
+			getShelfPinnedOpen: () => true,
+			setShelfPinnedOpen: () => {},
+		}),
+		cinema: { setFocusZone: () => {} },
+		getHit: () => null,
+		getSplashActive: () => false,
+		getPortrait: () => true,
+		getWallpaperSafe: () => false,
+		getViewportWidth: () => 600,
+		getViewportHeight: () => 900,
+		getShelfPresence: () => "auto",
+		getShelfPreviewActive: () => true,
+	});
+
+	const inside = makeWheelEvent({ deltaY: 120, clientX: 500, clientY: 300 });
+	const outsideY = makeWheelEvent({ deltaY: 120, clientX: 500, clientY: 800 });
+	target.emit("wheel", inside);
+	target.emit("wheel", outsideY);
+	cleanup();
+
+	expect(scrolled).toEqual([1]);
+	expect(inside.calls).toEqual(["preventDefault", "stopImmediatePropagation"]);
+	expect(outsideY.calls).toEqual([]);
 });
 
 test("attachShelfPointerInteractionWiring applies portrait side auto preview wheel-zone geometry", () => {
