@@ -1,8 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
-import type { HealthResponse, ProviderId } from "@mineradio/shared";
+import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 import { SidecarClient, SidecarClientError } from "../api/sidecar-client";
-import { LyricView } from "../components/lyrics/LyricView";
-import { SearchPanel } from "../components/search/SearchPanel";
 import { PlayerController } from "../audio/player-controller";
 import { selectCurrentIndex } from "../lyrics/select-current-index";
 import { useLyricsStore } from "../stores/lyrics-store";
@@ -14,15 +11,6 @@ import { VisualEngineHost } from "../visual/VisualEngineHost";
 import { createShelfDetailContentLoader, playShelfDetailRow } from "../visual/shelf-detail-data";
 
 const SHOW_SPLASH = import.meta.env.VITE_SPLASH !== "0";
-
-type Phase = "loading" | "connected" | "error";
-
-interface SidecarError {
-	code: string;
-	message: string;
-}
-
-const PROVIDER_ROWS: ProviderId[] = ["netease", "qq"];
 
 function placeholderRuntimeConfig(): RuntimeConfig {
 	return {
@@ -42,9 +30,6 @@ function audioElementSupported(): boolean {
 }
 
 export function App(): ReactElement {
-	const [phase, setPhase] = useState<Phase>("loading");
-	const [health, setHealth] = useState<HealthResponse | null>(null);
-	const [error, setError] = useState<SidecarError | null>(null);
 	const [sidecarClient, setSidecarClient] = useState<SidecarClient | null>(null);
 	const [splashActive, setSplashActive] = useState<boolean>(SHOW_SPLASH);
 
@@ -52,8 +37,6 @@ export function App(): ReactElement {
 	const queue = usePlaybackStore((s) => s.queue);
 	const isPlaying = usePlaybackStore((s) => s.isPlaying);
 	const positionMs = usePlaybackStore((s) => s.positionMs);
-	const status = useProviderStore((s) => s.status);
-	const matrix = useProviderStore((s) => s.matrix);
 	const setMatrix = useProviderStore((s) => s.setMatrix);
 
 	const lyricsPayload = useLyricsStore((s) => s.payload);
@@ -97,8 +80,7 @@ export function App(): ReactElement {
 			if (cancelledRef.current) return;
 
 			if (!cfg.sidecarBaseUrl) {
-				setPhase("error");
-				setError({
+				console.warn("sidecar base url not configured", {
 					code: "NO_RUNTIME",
 					message: "sidecar base url not configured",
 				});
@@ -110,30 +92,26 @@ export function App(): ReactElement {
 
 			async function poll(): Promise<void> {
 				try {
-					const h = await client.health();
+					await client.health();
 					if (cancelledRef.current) return;
-					setHealth(h);
-					setPhase("connected");
 					try {
 						const caps = await client.capabilities();
 						if (!cancelledRef.current) setMatrix(caps);
 					} catch {
-						// capabilities are best-effort in the shell phase
+						// 能力矩阵仅用于运行期同步，失败不阻断视觉宿主。
 					}
 				} catch (e) {
 					if (cancelledRef.current) return;
 					attempts += 1;
 					if (e instanceof SidecarClientError) {
-						setError({ code: e.code, message: e.message });
+						console.warn("sidecar health failed", { code: e.code, message: e.message });
 					} else {
-						setError({ code: "UNKNOWN", message: "unknown error" });
+						console.warn("sidecar health failed", { code: "UNKNOWN", message: "unknown error" });
 					}
 					if (attempts < 5) {
 						timer = setTimeout(() => {
 							void poll();
 						}, 800);
-					} else {
-						setPhase("error");
 					}
 				}
 			}
@@ -184,7 +162,7 @@ export function App(): ReactElement {
 			usePlaybackStore.getState().next();
 		});
 		controller.on("error", (payload) => {
-			setError({ code: `AUDIO_${payload.code}`, message: payload.message });
+			console.warn("audio playback failed", { code: `AUDIO_${payload.code}`, message: payload.message });
 		});
 		return () => {
 			controllerRef.current = null;
@@ -214,7 +192,7 @@ export function App(): ReactElement {
 			} catch (e) {
 				const code = e instanceof SidecarClientError ? e.code : "AUDIO_UNKNOWN";
 				const message = e instanceof Error ? e.message : "playback error";
-				setError({ code, message });
+				console.warn("playback load failed", { code, message });
 			}
 			try {
 				setLyricsLoading(true);
@@ -226,23 +204,6 @@ export function App(): ReactElement {
 			}
 		})();
 	}, [currentTrack, sidecarClient, setLyricsError, setLyricsLoading, setLyricsPayload, lyricsReset]);
-
-	const lyricsSignedIndex = useMemo(
-		() => selectCurrentIndex(positionMs, lyricsPayload),
-		[positionMs, lyricsPayload],
-	);
-
-	function providerRow(id: ProviderId): string {
-		if (status && status[id]) {
-			return status[id].available
-				? `available — ${status[id].message ?? "online"}`
-				: `pending — ${status[id].message ?? "not available"}`;
-		}
-		if (matrix) {
-			return "pending";
-		}
-		return "pending";
-	}
 
 	return (
 		<>
@@ -272,69 +233,6 @@ export function App(): ReactElement {
 					void loader(payload);
 				}}
 			/>
-			<main className="shell">
-			<section className="status-panel">
-				<p className="eyebrow">Mineradio Tauri Rewrite</p>
-				<h1>Tauri Rewrite Shell</h1>
-				<dl>
-					<div>
-						<dt>Sidecar</dt>
-						<dd>
-							{phase === "loading" && "loading…"}
-							{phase === "connected" && health && (
-								<span>
-									connected · api {health.apiVersion} · schema {health.schemaVersion} · providers {health.providers.join(",") || "—"}
-								</span>
-							)}
-							{phase === "error" && error && `${error.code}: ${error.message}`}
-						</dd>
-					</div>
-					<div>
-						<dt>Providers</dt>
-						<dd>
-							<ul className="provider-rows">
-								{PROVIDER_ROWS.map((id) => (
-									<li key={id}>
-										{id}: {providerRow(id)}
-									</li>
-								))}
-							</ul>
-						</dd>
-					</div>
-					<div>
-						<dt>Playback</dt>
-						<dd>
-							{currentTrack
-								? `${currentTrack.title} — ${isPlaying ? "playing" : "paused"}`
-								: "no track"}
-						</dd>
-					</div>
-					<div>
-						<dt>Search</dt>
-						<dd>
-							{sidecarClient ? (
-								<SearchPanel client={sidecarClient} />
-							) : (
-								<span>connecting…</span>
-							)}
-						</dd>
-					</div>
-					<div>
-						<dt>Lyrics</dt>
-						<dd>
-							<LyricView payload={lyricsPayload} positionMs={positionMs} />
-							{lyricsPayload && ` · line ${lyricsSignedIndex + 1}`}
-						</dd>
-					</div>
-				<div>
-					<dt>Visual Host</dt>
-					<dd>
-						<span className="visual-host-label">visual engine running</span>
-					</dd>
-				</div>
-				</dl>
-			</section>
-		</main>
 		</>
 	);
 }

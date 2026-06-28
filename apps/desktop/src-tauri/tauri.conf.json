@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.mineradio.fork.tauri",
   "build": {
-    "beforeDevCommand": "bun run --filter ./apps/web dev",
+    "beforeDevCommand": "bun run --filter @mineradio/web dev",
     "devUrl": "http://127.0.0.1:5173",
-    "beforeBuildCommand": "bun run --filter ./apps/web build",
+    "beforeBuildCommand": "bun run --filter @mineradio/web build",
     "frontendDist": "../../web/dist"
   },
   "app": {

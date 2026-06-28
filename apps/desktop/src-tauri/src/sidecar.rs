@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct HealthInfo {
@@ -50,11 +50,21 @@ pub fn build_sidecar_command(
 ) -> std::process::Command {
     let mut cmd = std::process::Command::new("bun");
     cmd.args(["run", "sidecars/api/src/server.ts"]);
+    cmd.current_dir(workspace_root_from_manifest_dir());
     cmd.env("MINERADIO_SIDECAR_PORT", port.to_string());
     cmd.env("MINERADIO_APP_DATA_DIR", app_data_dir);
     cmd.env("MINERADIO_LOG_DIR", log_dir);
     cmd.env("MINERADIO_APP_VERSION", app_version);
     cmd
+}
+
+pub fn workspace_root_from_manifest_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .and_then(Path::parent)
+        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")))
+        .to_path_buf()
 }
 
 pub fn spawn_sidecar(mut cmd: std::process::Command) -> Result<std::process::Child, SidecarError> {
@@ -204,6 +214,10 @@ mod tests {
             .map(|a| a.to_str().unwrap().to_string())
             .collect();
         assert_eq!(args, vec!["run", "sidecars/api/src/server.ts"]);
+        assert_eq!(
+            cmd.get_current_dir(),
+            Some(workspace_root_from_manifest_dir().as_path())
+        );
 
         let envs: Vec<(&std::ffi::OsStr, Option<&std::ffi::OsStr>)> = cmd.get_envs().collect();
         let get = |key: &str| -> Option<String> {
