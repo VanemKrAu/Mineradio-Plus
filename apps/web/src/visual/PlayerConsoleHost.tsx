@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type ReactElement } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactElement } from "react";
 import {
 	attachControlGlassNode,
 	createControlConsoleMotion,
@@ -6,6 +6,7 @@ import {
 	type ControlConsoleMotion,
 } from "@mineradio/visual-engine";
 import type { PlaybackMode } from "../stores/playback-store";
+import type { Track } from "@mineradio/shared";
 
 export interface PlayerConsoleHostProps {
 	visible?: boolean;
@@ -17,6 +18,12 @@ export interface PlayerConsoleHostProps {
 	onQueue?: () => void;
 	onLyrics?: () => void;
 	onNotice?: (message: string) => void;
+	onSeek?: (positionMs: number) => void;
+	onVolumeChange?: (volume: number) => void;
+	onToggleMute?: () => void;
+	onPlayQueueIndex?: (index: number) => void;
+	onRemoveQueueIndex?: (index: number) => void;
+	onInsertQueueNext?: (index: number) => void;
 	onMinimize?: () => void;
 	onToggleMaximize?: () => void;
 	onToggleFullscreen?: () => void;
@@ -25,8 +32,14 @@ export interface PlayerConsoleHostProps {
 	isPlaying?: boolean;
 	currentTitle?: string;
 	currentArtist?: string;
+	currentCoverUrl?: string;
+	queue?: Track[];
+	currentTrack?: Track | null;
+	miniQueueOpen?: boolean;
 	positionMs?: number;
 	durationMs?: number | null;
+	volume?: number;
+	muted?: boolean;
 	deps?: {
 		controlsHovering?: () => boolean;
 		miniQueueOpen?: () => boolean;
@@ -68,8 +81,22 @@ export function PlayerConsoleHost(props: PlayerConsoleHostProps): ReactElement {
 	onLyricsRef.current = props.onLyrics;
 	const onNoticeRef = useRef(props.onNotice);
 	onNoticeRef.current = props.onNotice;
+	const onSeekRef = useRef(props.onSeek);
+	onSeekRef.current = props.onSeek;
+	const onVolumeChangeRef = useRef(props.onVolumeChange);
+	onVolumeChangeRef.current = props.onVolumeChange;
+	const onToggleMuteRef = useRef(props.onToggleMute);
+	onToggleMuteRef.current = props.onToggleMute;
+	const onPlayQueueIndexRef = useRef(props.onPlayQueueIndex);
+	onPlayQueueIndexRef.current = props.onPlayQueueIndex;
+	const onRemoveQueueIndexRef = useRef(props.onRemoveQueueIndex);
+	onRemoveQueueIndexRef.current = props.onRemoveQueueIndex;
+	const onInsertQueueNextRef = useRef(props.onInsertQueueNext);
+	onInsertQueueNextRef.current = props.onInsertQueueNext;
 	const depsRef = useRef(props.deps);
 	depsRef.current = props.deps;
+	const [progressDragging, setProgressDragging] = useState(false);
+	const [volumeOpen, setVolumeOpen] = useState(false);
 
 	const registerNormal = useCallback((id: string) => (el: HTMLButtonElement | null) => {
 		normalBtnRefs.current[id] = el;
@@ -113,7 +140,7 @@ export function PlayerConsoleHost(props: PlayerConsoleHostProps): ReactElement {
 		const handlers: Array<{ el: HTMLElement; type: string; fn: (e: Event) => void }> = [];
 		for (const { el, kind } of btnBindings) {
 			const hoverIn = (e: Event) => {
-				if ((e as PointerEvent).pointerType === "touch") return;
+				if ((e as globalThis.PointerEvent).pointerType === "touch") return;
 				if (kind === "play") motion.playButtonHover(el, true);
 				else motion.normalButtonHover(el, true);
 			};
@@ -204,9 +231,32 @@ export function PlayerConsoleHost(props: PlayerConsoleHostProps): ReactElement {
 	const noticeStub = useCallback((message: string) => {
 		onNoticeRef.current?.(message);
 	}, []);
-
 	const positionMs = props.positionMs ?? 0;
 	const durationMs = props.durationMs ?? 0;
+	const seekFromPointer = useCallback((clientX: number, target: HTMLDivElement) => {
+		if (durationMs <= 0) return;
+		const rect = target.getBoundingClientRect();
+		const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+		onSeekRef.current?.(Math.floor(durationMs * ratio));
+	}, [durationMs]);
+	const seekStub = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+		event.currentTarget.setPointerCapture?.(event.pointerId);
+		setProgressDragging(true);
+		seekFromPointer(event.clientX, event.currentTarget);
+	}, [seekFromPointer]);
+	const seekMoveStub = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+		if (!progressDragging) return;
+		seekFromPointer(event.clientX, event.currentTarget);
+	}, [progressDragging, seekFromPointer]);
+	const seekEndStub = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+		setProgressDragging(false);
+		event.currentTarget.releasePointerCapture?.(event.pointerId);
+	}, []);
+	const volume = Math.max(0, Math.min(1, props.volume ?? 0.84));
+	const muted = !!props.muted;
+	const volumePct = Math.round((muted ? 0 : volume) * 100);
+
+	const progressPct = durationMs > 0 ? Math.max(0, Math.min(100, (positionMs / durationMs) * 100)) : 0;
 	const formatTime = (ms: number): string => {
 		const total = Math.max(0, Math.floor(ms / 1000));
 		const m = Math.floor(total / 60);
@@ -216,13 +266,14 @@ export function PlayerConsoleHost(props: PlayerConsoleHostProps): ReactElement {
 
 	return (
 		<div id="bottom-bar" className={props.visible ? "visible" : "soft-hidden"} ref={barRef}>
-			<div id="progress-bar">
-				<div id="progress-fill" />
+			<div id="progress-bar" className={progressDragging ? "is-dragging" : ""} onPointerDown={seekStub} onPointerMove={seekMoveStub} onPointerUp={seekEndStub} onPointerCancel={seekEndStub}>
+				<div id="progress-fill" style={{ width: `${progressPct}%` }} />
+				<div id="progress-thumb" aria-hidden="true" style={{ left: `${progressPct}%` }} />
 			</div>
 			<div id="controls">
 				<div className="control-cluster actions">
 					<div className="control-track">
-						<div id="control-cover" className="control-cover cover-empty" aria-hidden="true" />
+						<div id="control-cover" className={props.currentCoverUrl ? "control-cover has-cover" : "control-cover cover-empty"} style={props.currentCoverUrl ? { backgroundImage: `url(${props.currentCoverUrl})` } : undefined} aria-hidden="true" />
 						<div className="control-meta">
 							<div id="control-title" className="control-title">{props.currentTitle ?? "Mineradio"}</div>
 							<div id="control-artist" className="control-artist">{props.currentArtist ?? "等待播放"}</div>
@@ -248,11 +299,53 @@ export function PlayerConsoleHost(props: PlayerConsoleHostProps): ReactElement {
 					<button id="next-btn" ref={registerNormal("next-btn")} className="ctrl-btn" type="button" title="下一首" aria-label="下一首" onClick={nextStub}>
 						<svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18" fill="currentColor"><path d="M16 5h2v14h-2zM6 5l9 7-9 7z" /></svg>
 					</button>
-					<button id="mini-queue-btn" ref={registerNormal("mini-queue-btn")} className="ctrl-btn" type="button" title="当前队列" aria-label="当前队列" onClick={queueStub}>
+					<button id="mini-queue-btn" ref={registerNormal("mini-queue-btn")} className={props.miniQueueOpen ? "ctrl-btn active" : "ctrl-btn"} type="button" title="当前队列" aria-label="当前队列" onClick={queueStub}>
 						<svg viewBox="0 0 24 24" aria-hidden="true" width="19" height="19" fill="none" stroke="currentColor" strokeWidth={2}><path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" /><path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" /></svg>
 					</button>
+					<div id="mini-queue-popover" className={props.miniQueueOpen ? "mini-queue-popover show" : "mini-queue-popover"} onClick={(event) => event.stopPropagation()}>
+						<div className="mini-queue-head">
+							<div>
+								<div className="mini-queue-title">当前队列</div>
+								<div id="mini-queue-count" className="mini-queue-count">{props.queue?.length ?? 0} 首</div>
+							</div>
+						</div>
+						<div id="mini-queue-list" className="mini-queue-list">
+							{!props.queue || props.queue.length === 0 ? (
+								<div className="mini-queue-empty">队列为空</div>
+							) : props.queue.map((track, index) => {
+								const now = !!props.currentTrack && props.currentTrack.provider === track.provider && props.currentTrack.id === track.id;
+								return (
+									<div className={now ? "mini-queue-item now" : "mini-queue-item"} key={`${track.provider}-${track.id}-${index}`}>
+										<button className="mini-queue-main" type="button" onClick={() => onPlayQueueIndexRef.current?.(index)}>
+											{track.coverUrl ? <img src={track.coverUrl} alt="" /> : <span className="mini-queue-cover" />}
+											<span className="mini-queue-info">
+												<span className="mini-queue-name">{track.title}</span>
+												<span className="mini-queue-sub">{track.artists.join(" / ") || "未知艺人"}</span>
+											</span>
+										</button>
+										<button className="mini-queue-remove mini-queue-next" type="button" title="下一首播放" onClick={() => onInsertQueueNextRef.current?.(index)}>+</button>
+										<button className="mini-queue-remove" type="button" title="移出队列" onClick={() => onRemoveQueueIndexRef.current?.(index)}>×</button>
+									</div>
+								);
+							})}
+						</div>
+					</div>
 				</div>
 				<div className="control-cluster modes">
+					<div id="quality-control" className="quality-control">
+						<button id="quality-btn" className="ctrl-btn quality-btn" ref={registerNormal("quality-btn")} type="button" title="音质" aria-label="音质" onClick={() => noticeStub("音质切换等待 sidecar song-url quality 参数接入")}>
+							<span id="quality-btn-label">标准</span>
+						</button>
+					</div>
+					<div id="volume-control" className="volume-control">
+						<button id="volume-btn" className={volumeOpen ? "ctrl-btn active" : "ctrl-btn"} ref={registerNormal("volume-btn")} type="button" title="音量" aria-label="音量" onClick={() => setVolumeOpen((open) => !open)} onDoubleClick={() => onToggleMuteRef.current?.()}>
+							<svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18" fill="none" stroke="currentColor" strokeWidth={2}><path d="M11 5 6 9H3v6h3l5 4V5Z" />{volumePct > 0 ? <path d="M15.5 8.5a5 5 0 0 1 0 7" /> : <path d="M16 9l5 5M21 9l-5 5" />}</svg>
+						</button>
+						<div className={volumeOpen ? "volume-popover show" : "volume-popover"}>
+							<input id="volume-slider" type="range" min="0" max="100" value={volumePct} onChange={(event) => onVolumeChangeRef.current?.(Number(event.currentTarget.value) / 100)} aria-label="音量" />
+							<div id="volume-value">{volumePct}%</div>
+						</div>
+					</div>
 					<button className="ctrl-btn lyrics-toggle-btn" ref={registerNormal("lyrics-toggle-btn")} type="button" title="歌词" aria-label="歌词" onClick={lyricsStub}>
 						<span className="lyrics-word-icon">词</span>
 					</button>

@@ -43,9 +43,18 @@ export function App(): ReactElement {
 	const queue = usePlaybackStore((s) => s.queue);
 	const isPlaying = usePlaybackStore((s) => s.isPlaying);
 	const positionMs = usePlaybackStore((s) => s.positionMs);
+	const durationMs = usePlaybackStore((s) => s.durationMs);
+	const volume = usePlaybackStore((s) => s.volume);
+	const muted = usePlaybackStore((s) => s.muted);
 	const setMatrix = useProviderStore((s) => s.setMatrix);
 	const consoleVisible = useUiStore((s) => s.consoleVisible);
 	const setConsole = useUiStore((s) => s.setConsole);
+	const miniQueueOpen = useUiStore((s) => s.miniQueueOpen);
+	const setMiniQueue = useUiStore((s) => s.setMiniQueue);
+	const toggleMiniQueue = useUiStore((s) => s.toggleMiniQueue);
+	const toast = useUiStore((s) => s.toast);
+	const showToast = useUiStore((s) => s.showToast);
+	const clearToast = useUiStore((s) => s.clearToast);
 
 	const lyricsPayload = useLyricsStore((s) => s.payload);
 	const setLyricsPayload = useLyricsStore((s) => s.setPayload);
@@ -57,10 +66,15 @@ export function App(): ReactElement {
 	const togglePlay = usePlaybackStore((s) => s.togglePlay);
 	const setPositionMs = usePlaybackStore((s) => s.setPosition);
 	const setDurationMs = usePlaybackStore((s) => s.setDuration);
+	const setVolume = usePlaybackStore((s) => s.setVolume);
+	const toggleMute = usePlaybackStore((s) => s.toggleMute);
 	const setPlaybackMode = usePlaybackStore((s) => s.setMode);
 	const playbackMode = usePlaybackStore((s) => s.mode);
 	const nextTrack = usePlaybackStore((s) => s.next);
 	const previousTrack = usePlaybackStore((s) => s.previous);
+	const playQueueAt = usePlaybackStore((s) => s.playAt);
+	const removeQueueAt = usePlaybackStore((s) => s.removeAt);
+	const insertQueueNext = usePlaybackStore((s) => s.insertNext);
 	const setSearchKeyword = useSearchStore((s) => s.setKeyword);
 	const setSearchError = useSearchStore((s) => s.setError);
 
@@ -99,15 +113,25 @@ export function App(): ReactElement {
 
 	const showUnavailable = useCallback((message: string) => {
 		setSearchError(message);
+		showToast(message);
 		focusSearch();
-	}, [focusSearch, setSearchError]);
+	}, [focusSearch, setSearchError, showToast]);
+
+	const showNotice = useCallback((message: string) => {
+		showToast(message);
+	}, [showToast]);
 
 	const goHome = useCallback(() => {
 		setConsole(false);
+		setMiniQueue(false);
 		focusSearch();
-	}, [focusSearch, setConsole]);
+	}, [focusSearch, setConsole, setMiniQueue]);
 
 	const togglePlayback = useCallback(() => {
+		if (!usePlaybackStore.getState().currentTrack) {
+			showToast("先搜索或打开歌单选择一首歌");
+			return;
+		}
 		const controller = controllerRef.current;
 		if (!controller) {
 			togglePlay();
@@ -115,7 +139,24 @@ export function App(): ReactElement {
 		}
 		if (usePlaybackStore.getState().isPlaying) controller.pause();
 		else void controller.play();
-	}, [togglePlay]);
+	}, [showToast, togglePlay]);
+
+	const playMiniQueueIndex = useCallback((index: number) => {
+		playQueueAt(index);
+		setMiniQueue(false);
+	}, [playQueueAt, setMiniQueue]);
+
+	const insertMiniQueueNext = useCallback((index: number) => {
+		const track = usePlaybackStore.getState().queue[index];
+		if (!track) return;
+		insertQueueNext(track);
+		showToast(`已设为下一首: ${track.title}`);
+	}, [insertQueueNext, showToast]);
+
+	const seekPlayback = useCallback((position: number) => {
+		controllerRef.current?.seek(position);
+		setPositionMs(position);
+	}, [setPositionMs]);
 
 	useEffect(() => {
 		if (typeof document === "undefined") return;
@@ -126,6 +167,27 @@ export function App(): ReactElement {
 			document.body.classList.remove("splash-active", "empty-home-active", "controls-visible");
 		};
 	}, [consoleVisible, emptyHomeActive, splashActive]);
+
+	useEffect(() => {
+		if (!toast) return;
+		const timer = setTimeout(() => clearToast(), 2600);
+		return () => clearTimeout(timer);
+	}, [clearToast, toast]);
+
+	useEffect(() => {
+		if (!miniQueueOpen || typeof document === "undefined") return;
+		const closeOnPointerDown = (event: PointerEvent) => {
+			const target = event.target;
+			if (target instanceof Element && target.closest("#bottom-bar")) return;
+			setMiniQueue(false);
+		};
+		document.addEventListener("pointerdown", closeOnPointerDown);
+		return () => document.removeEventListener("pointerdown", closeOnPointerDown);
+	}, [miniQueueOpen, setMiniQueue]);
+
+	useEffect(() => {
+		controllerRef.current?.setVolume(muted ? 0 : volume);
+	}, [muted, volume]);
 
 	useEffect(() => {
 		cancelledRef.current = false;
@@ -194,6 +256,8 @@ export function App(): ReactElement {
 		audio.preload = "metadata";
 		audioRef.current = audio;
 		const controller = new PlayerController(audio);
+		const playback = usePlaybackStore.getState();
+		controller.setVolume(playback.muted ? 0 : playback.volume);
 		controllerRef.current = controller;
 
 		let lastDuration: number | null = null;
@@ -220,7 +284,11 @@ export function App(): ReactElement {
 		});
 		controller.on("ended", () => {
 			setPositionMs(0);
-			usePlaybackStore.getState().next();
+			usePlaybackStore.getState().ended();
+			if (usePlaybackStore.getState().mode === "single" && controllerRef.current) {
+				controllerRef.current.seek(0);
+				void controllerRef.current.play();
+			}
 		});
 		controller.on("error", (payload) => {
 			console.warn("audio playback failed", { code: `AUDIO_${payload.code}`, message: payload.message });
@@ -315,17 +383,33 @@ export function App(): ReactElement {
 				onPrevious={previousTrack}
 				onNext={nextTrack}
 				onModeChange={setPlaybackMode}
-				onQueue={() => showUnavailable(queue.length > 0 ? `当前队列 ${queue.length} 首，歌单架会同步显示` : "当前队列为空")}
-				onLyrics={() => showUnavailable(lyricsPayload ? "歌词已载入舞台层" : "播放歌曲后会自动加载歌词")}
-				onClose={() => setConsole(false)}
-				onNotice={showUnavailable}
+				onQueue={toggleMiniQueue}
+				onLyrics={() => showNotice(lyricsPayload ? "歌词已载入舞台层" : "播放歌曲后会自动加载歌词")}
+				onClose={() => {
+					setConsole(false);
+					setMiniQueue(false);
+				}}
+				onNotice={showNotice}
+				onSeek={seekPlayback}
+				onVolumeChange={setVolume}
+				onToggleMute={toggleMute}
+				onPlayQueueIndex={playMiniQueueIndex}
+				onRemoveQueueIndex={removeQueueAt}
+				onInsertQueueNext={insertMiniQueueNext}
 				mode={playbackMode}
 				isPlaying={isPlaying}
 				currentTitle={currentTrack?.title}
 				currentArtist={currentTrack?.artists.join(" / ")}
+				currentCoverUrl={currentTrack?.coverUrl}
+				queue={queue}
+				currentTrack={currentTrack}
+				miniQueueOpen={miniQueueOpen}
 				positionMs={positionMs}
-				durationMs={usePlaybackStore.getState().durationMs}
+				durationMs={durationMs}
+				volume={volume}
+				muted={muted}
 			/>
+			<div id="toast" className={toast ? "show" : ""} role="status" aria-live="polite">{toast ?? ""}</div>
 		</>
 	);
 }

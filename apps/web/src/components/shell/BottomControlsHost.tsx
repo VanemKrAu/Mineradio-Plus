@@ -1,6 +1,7 @@
 import { type ReactElement } from "react";
 import { PlayerConsoleHost } from "../../visual/PlayerConsoleHost";
 import type { PlaybackMode } from "../../stores/playback-store";
+import type { Track } from "@mineradio/shared";
 
 export interface BottomControlsHostProps {
 	visible: boolean;
@@ -13,12 +14,24 @@ export interface BottomControlsHostProps {
 	onLyrics?: () => void;
 	onClose?: () => void;
 	onNotice?: (message: string) => void;
+	onSeek?: (positionMs: number) => void;
+	onVolumeChange?: (volume: number) => void;
+	onToggleMute?: () => void;
+	onPlayQueueIndex?: (index: number) => void;
+	onRemoveQueueIndex?: (index: number) => void;
+	onInsertQueueNext?: (index: number) => void;
 	mode?: PlaybackMode;
 	isPlaying?: boolean;
 	currentTitle?: string;
 	currentArtist?: string;
+	currentCoverUrl?: string;
+	queue?: Track[];
+	currentTrack?: Track | null;
+	miniQueueOpen?: boolean;
 	positionMs?: number;
 	durationMs?: number | null;
+	volume?: number;
+	muted?: boolean;
 }
 
 export function BottomControlsHost(props: BottomControlsHostProps): ReactElement {
@@ -46,12 +59,24 @@ export function BottomControlsHost(props: BottomControlsHostProps): ReactElement
 				onLyrics={props.onLyrics}
 				onClose={props.onClose}
 				onNotice={props.onNotice}
+				onSeek={props.onSeek}
+				onVolumeChange={props.onVolumeChange}
+				onToggleMute={props.onToggleMute}
+				onPlayQueueIndex={props.onPlayQueueIndex}
+				onRemoveQueueIndex={props.onRemoveQueueIndex}
+				onInsertQueueNext={props.onInsertQueueNext}
 				mode={props.mode}
 				isPlaying={props.isPlaying}
 				currentTitle={props.currentTitle}
 				currentArtist={props.currentArtist}
+				currentCoverUrl={props.currentCoverUrl}
+				queue={props.queue}
+				currentTrack={props.currentTrack}
+				miniQueueOpen={props.miniQueueOpen}
 				positionMs={props.positionMs}
 				durationMs={props.durationMs}
+				volume={props.volume}
+				muted={props.muted}
 			/>
 		</>
 	);

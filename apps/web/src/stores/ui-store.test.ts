@@ -14,3 +14,15 @@ test("toggleConsole flips console visibility", () => {
 	useUiStore.getState().toggleConsole();
 	expect(useUiStore.getState().consoleVisible).toBe(true);
 });
+
+test("mini queue and toast actions mirror baseline shell affordances", () => {
+	useUiStore.setState({ miniQueueOpen: false, toast: null });
+	useUiStore.getState().toggleMiniQueue();
+	expect(useUiStore.getState().miniQueueOpen).toBe(true);
+	useUiStore.getState().setMiniQueue(false);
+	expect(useUiStore.getState().miniQueueOpen).toBe(false);
+	useUiStore.getState().showToast("hello");
+	expect(useUiStore.getState().toast).toBe("hello");
+	useUiStore.getState().clearToast();
+	expect(useUiStore.getState().toast).toBeNull();
+});
