@@ -37,27 +37,22 @@ This plan supersedes using the old master implementation plan as a direct execut
 
 ## Current Audit Summary
 
+> Status note, 2026-06-29: the gap list below is the audit snapshot that created this final parity plan. Many code-side slices have since been implemented and verified. Treat the current gate source of truth as `docs/migration/CAPABILITY_PARITY_CHECKLIST.md`: code-side Phase 1-5 closure is recorded there, while visual/WebView2/provider-account/Windows installer/release evidence remains open until manually captured.
+
 ### P0 Product Gaps
 
-- Startup shell is incomplete: `apps/web/src/app/App.tsx` mounts `SplashHost`, `EmptyHomeHost`, and `VisualEngineHost`, but not the baseline search area, top-right commands, bottom handle, or bottom player console.
-- Empty Home is a static React surface, not the baseline state machine. It does not follow playback, queue, immersive mode, shelf detail, or `controls-visible` state.
-- Search and playback entry points exist as components and services but are not connected into the baseline startup flow.
-- The web playback path does not consistently use sidecar cross-source `/song-url` or `/audio-proxy`, so real UI playback does not yet exercise the provider failover and proxy layer.
+- Original gap: startup shell, Empty Home state machine, search/bottom/top-right mounts, and playback handoff were incomplete when this plan was written.
+- 2026-06-29 code-side status: these shell/product-flow paths have been restored through React/Zustand hosts, cross-source search, baseline queue semantics, sidecar `/song-url`, and `/audio-proxy` wiring. Remaining closure requires WebView2/Electron side-by-side verification and real playback evidence.
 
 ### P1 Visual And Interaction Gaps
 
-- Splash is closest to baseline but lacks the intro sound path.
-- HomeVisual is still a particle/shader skeleton compared with the baseline cover/depth/edge/ripple/back-cover/float/skull/gesture/free-camera chain.
-- Stage lyrics host currently loses word timing and has a time-unit risk between millisecond render-loop time and second-based animation math.
-- 3D shelf has strong core progress but still lacks full provider/user playlist sources, row action parity, pinned detail behavior, interaction feedback, and recorded visual proof.
-- Connector particles, resize/camera updates, and WebView2 nonblank visual-host checks require completion.
+- Original gap: splash sound, HomeVisual cover/depth/ripple/skull/free-camera chain, stage lyric word timing, connector particles, shelf data/actions/detail/feedback, resize/camera and nonblank proof were incomplete when this plan was written.
+- 2026-06-29 code-side status: those visual-engine slices are implemented or guarded as hidden by decision where applicable. Remaining closure requires WebView2/Electron visual recordings, real provider shelf data, and interaction parity evidence.
 
 ### P1 Runtime And Release Gaps
 
-- Rust starts the Bun sidecar, but does not retain the child handle, restart on crash, expose recovery state, or write rolling logs.
-- Login windows are skeletons: cookie extraction, login detection, and sidecar session injection require end-to-end implementation and B1 credential validation.
-- Updater detection is wired, but download/install is blocked by empty pubkey/signature policy and no real release manifest validation.
-- License, notices, installer inclusion, release notes, and Windows install/update/uninstall gates are still open.
+- Original gap: sidecar supervision/logging, login WebView cookie extraction/session injection, desktop lyrics runtime parity, updater/release/license packaging, and Windows installer evidence were incomplete when this plan was written.
+- 2026-06-29 code-side status: sidecar child retention/restart/logging/diagnostics, login WebView injection, desktop lyrics payload/fit/scroll/native middle-click poller, updater detection-only UI/policy, NSIS config, license audits, packaged-notices declarations, and Tauri build are implemented. Remaining closure requires B1 account validation, Windows/WebView2 runtime evidence, release manifest/upload/signature decision evidence, install/uninstall proof, and packaged notice inspection.
 
 ## Execution Rules
 
@@ -294,6 +289,8 @@ This plan supersedes using the old master implementation plan as a direct execut
 
 **Goal:** Make startup, HomeVisual, glass controls, stage lyrics, connector particles, and 3D shelf match Electron visual timing, composition, and interaction.
 
+> 2026-06-29 execution status: the implementation slices listed below have been completed in code for startup sound, HomeVisual cover/depth/ripple/back-cover/skull/free-camera, stage lyrics timing/feed, connector particles, shelf account data/detail/actions/feedback/pane lifecycle, and resize/camera guards where covered by automated tests. Keep the historical steps unchecked in this plan until Phase 3 is closed by the manual visual evidence in Step 9 and the matching rows in `CAPABILITY_PARITY_CHECKLIST.md` are checked.
+
 **Files:**
 
 - Modify: `packages/visual-engine/src/splash/`
@@ -367,6 +364,8 @@ This plan supersedes using the old master implementation plan as a direct execut
 
 **Goal:** Close desktop runtime behavior to match Electron where the new Tauri architecture must own system integration.
 
+> 2026-06-29 execution status: sidecar child retention/restart/logging/diagnostics, login WebView cookie extraction/session injection, window commands/state, import/export, global hotkeys, desktop lyrics payload throttling, text fitting/scrolling, motion payloads, and native middle-click polling are implemented in code. Keep this phase open until Windows/WebView2 runtime evidence proves sidecar recovery, real login/logout/session injection, desktop lyrics click-through/drag/readability, and hidden wallpaper entry behavior.
+
 **Files:**
 
 - Modify: `apps/desktop/src-tauri/src/lib.rs`
@@ -434,6 +433,8 @@ This plan supersedes using the old master implementation plan as a direct execut
 
 **Goal:** Make the public release path complete without reusing old Electron updater/patch JSON or old app identity.
 
+> 2026-06-29 execution status: B2 currently means no signing key/public key, so the shipped updater path is detection-only with an explicit `signature-key-missing` gate. Policy guards, release identity, NSIS config, release CSP, packaged-notices declaration, license/transitive audits, release-notes wording guard, and a local Tauri NSIS build are code-side complete. Keep this phase open until a real release manifest/upload path, install/uninstall evidence, packaged notices inspection, and any future signed-updater decision are captured.
+
 **Files:**
 
 - Modify: `apps/desktop/src-tauri/tauri.conf.json`
@@ -459,7 +460,7 @@ This plan supersedes using the old master implementation plan as a direct execut
 
 - [ ] **Step 2: Complete updater UI**
 
-  Add user-facing states for checking, available, no update, error, signature blocked, downloading, installing, and restart required. The UI must call Rust commands only.
+  Under the current B2 no-signing decision, add only detection-safe user-facing states for checking, available, no update, error, and signature blocked; the UI must call Rust commands only and must not expose download/install/restart-required states unless a later signed-updater decision adds a public key and signed release assets.
 
 - [ ] **Step 3: Configure Windows installer behavior**
 

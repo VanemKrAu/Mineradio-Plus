@@ -127,4 +127,4 @@
 
 ## 当前结论
 
-截至 2026-06-28，迁移文档已完成最终阶段收口计划。后续不再从旧 master sequencing plan 直接开工，而是从 `docs/migration/plans/11-final-baseline-parity.md` 的 Phase 0-6 逐阶段执行：先对齐计划和证据，再恢复 Home/Search/Playback/Visual/Runtime/Release parity，最后用截图、录屏、Windows/WebView2、license 和 release artifact 证据关闭公开发布 gate。
+截至 2026-06-29，迁移继续以 `docs/migration/plans/11-final-baseline-parity.md` 和 `docs/migration/CAPABILITY_PARITY_CHECKLIST.md` 为总控入口。Phase 1-5 的主要代码侧切片已完成并由 checklist 记录；后续优先处理 checklist 中仍未勾选的证据 gate：WebView2/Electron 视觉与交互对照、真实 provider 账号态、Windows 运行/安装/卸载、release manifest/upload、packaged notices 和最终签名/更新决策。若审查发现新的代码侧差距，再从对应 phase 派生一个可 review 的小任务实施。
