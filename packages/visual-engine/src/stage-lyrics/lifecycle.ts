@@ -216,6 +216,7 @@ export function createStageLyricsLifecycle(opts: StageLyricsLifecycleOpts): Stag
 		buildToken: 0,
 		activeBuilds: 0,
 		textOptionsSignature: "",
+		lockFitScale: 1,
 		pendingBuildPromise: null as Promise<void> | null,
 		paletteRuntime: new LyricPaletteRuntime(opts.palette),
 		reduceMotionFlag: false,
@@ -293,6 +294,51 @@ export function createStageLyricsLifecycle(opts: StageLyricsLifecycleOpts): Stag
 		};
 	}
 
+	function getStageLyricLockBounds(): { w: number; h: number } {
+		let maxW = 0;
+		let maxH = 0;
+		function take(lyric: LyricGroup | null | undefined): void {
+			if (!lyric) return;
+			const group = lyric.group as unknown as {
+				userData?: { lyric?: { textWorldW?: number; worldW?: number; textWorldH?: number; worldH?: number } };
+				scale?: { x?: number; y?: number };
+			};
+			const data = group.userData?.lyric;
+			if (!data) return;
+			const meshScale = Math.max(
+				typeof group.scale?.x === "number" && isFinite(group.scale.x) ? group.scale.x : 1,
+				typeof group.scale?.y === "number" && isFinite(group.scale.y) ? group.scale.y : 1,
+			);
+			maxW = Math.max(maxW, (data.textWorldW || data.worldW || 6.1) * meshScale);
+			maxH = Math.max(maxH, (data.textWorldH || data.worldH || 1.0) * meshScale);
+		}
+		take(state.current);
+		for (const entry of state.outgoing) take(entry.lyric);
+		return { w: maxW || 5.4, h: maxH || 0.78 };
+	}
+
+	function lyricCameraLockFit(
+		camera: THREE.PerspectiveCamera,
+		layoutScale: number,
+		layoutX: number,
+		layoutY: number,
+		distance: number,
+	): number {
+		const scale = Math.max(0.1, layoutScale || 1);
+		const fov = ((camera.fov || 45) * Math.PI) / 180;
+		const dist = Math.max(1.4, distance || 4.85);
+		const visibleH = 2 * Math.tan(fov * 0.5) * dist;
+		const visibleW = visibleH * (camera.aspect || 1.78);
+		const bounds = getStageLyricLockBounds();
+		const safeW = Math.max(visibleW * 0.42, visibleW * 0.84 - Math.abs(layoutX || 0) * 1.22);
+		const safeH = Math.max(visibleH * 0.18, visibleH * 0.44 - Math.abs(layoutY || 0) * 0.82);
+		const scaledW = Math.max(0.01, bounds.w * scale);
+		const scaledH = Math.max(0.01, bounds.h * scale);
+		const viewportFit = Math.min(1, safeW / scaledW, safeH / scaledH);
+		const lockScaleCap = Math.min(1, 0.80 / scale);
+		return clamp(Math.min(viewportFit, lockScaleCap), 0.42, 1);
+	}
+
 	function setGroupPosition(
 		group: {
 			position?: { set?: (x: number, y: number, z: number) => void; x: number; y: number; z: number };
@@ -336,6 +382,10 @@ export function createStageLyricsLifecycle(opts: StageLyricsLifecycleOpts): Stag
 		setGroupScale(group, layout.lyricScale);
 		const camera = layout.lyricCameraLock ? opts.cameraSupplier?.() ?? null : null;
 		if (camera) {
+			const lockFit = lyricCameraLockFit(camera, layout.lyricScale, layout.lyricOffsetX, layout.lyricOffsetY, 4.85 + layout.lyricOffsetZ);
+			state.lockFitScale += (lockFit - state.lockFitScale) * (lockFit < state.lockFitScale ? 0.18 : 0.10);
+			state.lockFitScale = finiteOr(state.lockFitScale, 1);
+			setGroupScale(group, layout.lyricScale * state.lockFitScale);
 			const q = camera.quaternion as { x: number; y: number; z: number; w: number };
 			const dir = { x: 0, y: 0, z: -1 };
 			const right = normalizeVec(applyQuaternionToVec({ x: 1, y: 0, z: 0 }, q));
@@ -359,6 +409,7 @@ export function createStageLyricsLifecycle(opts: StageLyricsLifecycleOpts): Stag
 			}
 			return;
 		}
+		state.lockFitScale = 1;
 		const x = layout.lyricOffsetX;
 		const y = 0.2 + layout.lyricOffsetY;
 		const z = 1.46 + layout.lyricOffsetZ;
