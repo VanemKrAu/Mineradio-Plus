@@ -378,7 +378,7 @@ This plan supersedes using the old master implementation plan as a direct execut
 
 **Goal:** Close desktop runtime behavior to match Electron where the new Tauri architecture must own system integration.
 
-> 2026-06-29 execution status: sidecar child retention/restart/logging/diagnostics, login WebView cookie extraction/session injection, window commands/state, import/export, global hotkeys, desktop lyrics payload throttling, text fitting/scrolling, motion payloads, and native middle-click polling are implemented in code. Keep this phase open until Windows/WebView2 runtime evidence proves sidecar recovery, real login/logout/session injection, desktop lyrics click-through/drag/readability, and hidden wallpaper entry behavior.
+> 2026-06-30 execution status: Phase 4 is code-side complete for current migration execution. Existing implementation plus this closeout cover Steps 1-7: sidecar child retention/restart/shutdown tests, bounded log paths and diagnostics log pointers without cookie/token values, login WebView cookie extraction/session injection plus popup provider-domain filtering, desktop lyrics payload throttling/fit/scroll/native middle-click polling, hidden wallpaper UI decisions, and automated checks. Step 8 remains open: Windows/WebView2 sidecar recovery, real login/logout/session injection, desktop lyrics click-through/drag/readability, and hidden wallpaper runtime evidence remain required final release/parity evidence and non-blocking for phase progression under the current user directive.
 
 **Files:**
 
@@ -399,31 +399,33 @@ This plan supersedes using the old master implementation plan as a direct execut
 - Desktop lyrics: `desktop/main.js`, `desktop/overlay-preload.js`, `public/index.html` desktop lyrics behavior and `BASELINE_ANIMATION_SPEC.md`.
 - Sidecar/runtime expectations: `server.js` local API behavior and migration checklist Sidecar Gate.
 
-- [ ] **Step 1: Add sidecar lifecycle tests**
+- [x] **Step 1: Add sidecar lifecycle tests**
 
   Rust helper tests must prove child handle retention, health wait, restart decisions, log path construction, and shutdown cleanup. Sidecar tests must prove diagnostics do not include cookies and rolling logs receive structured events.
 
-- [ ] **Step 2: Retain and supervise sidecar child**
+- [x] **Step 2: Retain and supervise sidecar child**
 
   Store the sidecar child handle in Tauri state, restart after crash, expose recovering/recovered status to React, and cleanly terminate on app exit.
 
-- [ ] **Step 3: Implement rolling logs**
+- [x] **Step 3: Implement rolling logs**
 
   Write bounded sidecar/runtime logs under app data. Diagnostics export must include version, provider status, recent errors, and log pointers without cookie values.
 
-- [ ] **Step 4: Complete login WebViews**
+- [x] **Step 4: Complete login WebViews**
 
   Implement Netease and QQ login windows with cookie extraction, login detection, popup handling, provider domain filtering, sidecar session injection, logout clearing, and no cookie echo in UI stores or diagnostics.
 
-- [ ] **Step 5: Complete desktop lyrics parity**
+- [x] **Step 5: Complete desktop lyrics parity**
 
   Verify payload push throttling at 24/30/60/120 fps, `lyr-in` 820ms, max 24 font-fit passes, horizontal smootherstep scroll, white/black readability, click-through, middle-click unlock, drag, and always-on-top behavior.
 
-- [ ] **Step 6: Validate hidden wallpaper decisions**
+  Code-side payload, fit, scroll, motion, and native middle-click polling are covered by existing tests. White/black readability, real click-through, drag, and always-on-top behavior still require Step 8 Windows/WebView2 evidence before final parity gates can be checked.
+
+- [x] **Step 6: Validate hidden wallpaper decisions**
 
   Keep Wallpaper Engine deep integration, experimental wallpaper mode, and hand-canvas hidden unless a later plan implements and validates them. Ensure no visible UI entry advertises hidden capabilities.
 
-- [ ] **Step 7: Verify automated phase**
+- [x] **Step 7: Verify automated phase**
 
   Run:
 

@@ -384,6 +384,13 @@ impl std::fmt::Debug for LoginSessionCookieRequest {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoginPopupAction {
+    NavigateInLoginWindow,
+    OpenExternal,
+    Deny,
+}
+
 impl LoginCookie {
     #[allow(dead_code)]
     pub fn new(
@@ -522,6 +529,25 @@ pub fn is_netease_cookie_domain(domain: &str) -> bool {
         || normalized.ends_with(".music.163.com")
         || normalized == "netease.com"
         || normalized.ends_with(".netease.com")
+}
+
+pub fn login_popup_action(provider: LoginProvider, url: &str) -> LoginPopupAction {
+    let Ok(parsed) = tauri::Url::parse(url) else {
+        return LoginPopupAction::Deny;
+    };
+    if !matches!(parsed.scheme(), "http" | "https") || parsed.host_str().is_none() {
+        return LoginPopupAction::Deny;
+    }
+    let host = parsed.host_str().unwrap_or_default();
+    let provider_domain = match provider {
+        LoginProvider::Netease => is_netease_cookie_domain(host),
+        LoginProvider::Qq => is_qq_cookie_domain(host),
+    };
+    if provider_domain {
+        LoginPopupAction::NavigateInLoginWindow
+    } else {
+        LoginPopupAction::OpenExternal
+    }
 }
 
 #[allow(dead_code)]
@@ -790,12 +816,29 @@ fn ensure_login_window(
     }
 
     let url = tauri::Url::parse(config.url).map_err(|e| e.to_string())?;
+    let popup_app = app.clone();
+    let popup_provider = provider;
+    let popup_label = config.label;
     let win = WebviewWindowBuilder::new(app, config.label, WebviewUrl::External(url))
         .title(config.title)
         .inner_size(config.width, config.height)
         .min_inner_size(config.min_width, config.min_height)
         .resizable(true)
         .decorations(true)
+        .on_new_window(move |url, _features| {
+            match login_popup_action(popup_provider, url.as_str()) {
+                LoginPopupAction::NavigateInLoginWindow => {
+                    if let Some(win) = popup_app.get_webview_window(popup_label) {
+                        let _ = win.navigate(url);
+                    }
+                }
+                LoginPopupAction::OpenExternal => {
+                    let _ = open_external(url.as_str().to_string());
+                }
+                LoginPopupAction::Deny => {}
+            }
+            tauri::webview::NewWindowResponse::Deny
+        })
         .build()
         .map_err(|e| e.to_string())?;
     win.show().map_err(|e| e.to_string())?;
@@ -2083,6 +2126,54 @@ mod tests {
         assert!(is_qq_cookie_domain(".qq.com"));
         assert!(is_qq_cookie_domain("y.qq.com"));
         assert!(!is_qq_cookie_domain("music.163.com"));
+    }
+
+    #[test]
+    fn login_popup_action_keeps_provider_domains_in_login_window() {
+        assert_eq!(
+            login_popup_action(LoginProvider::Netease, "https://music.163.com/#/login"),
+            LoginPopupAction::NavigateInLoginWindow
+        );
+        assert_eq!(
+            login_popup_action(LoginProvider::Netease, "https://interface.music.163.com/login"),
+            LoginPopupAction::NavigateInLoginWindow
+        );
+        assert_eq!(
+            login_popup_action(LoginProvider::Qq, "https://y.qq.com/n/ryqq/profile"),
+            LoginPopupAction::NavigateInLoginWindow
+        );
+        assert_eq!(
+            login_popup_action(LoginProvider::Qq, "https://ptlogin2.qq.com/cgi-bin/login"),
+            LoginPopupAction::NavigateInLoginWindow
+        );
+    }
+
+    #[test]
+    fn login_popup_action_opens_cross_provider_http_externally_and_denies_other_schemes() {
+        assert_eq!(
+            login_popup_action(LoginProvider::Netease, "https://y.qq.com/n/ryqq/profile"),
+            LoginPopupAction::OpenExternal
+        );
+        assert_eq!(
+            login_popup_action(LoginProvider::Qq, "https://music.163.com/#/login"),
+            LoginPopupAction::OpenExternal
+        );
+        assert_eq!(
+            login_popup_action(LoginProvider::Netease, "https://music.163.com.evil.example"),
+            LoginPopupAction::OpenExternal
+        );
+        assert_eq!(
+            login_popup_action(LoginProvider::Qq, "https://qq.com.evil.example"),
+            LoginPopupAction::OpenExternal
+        );
+        assert_eq!(
+            login_popup_action(LoginProvider::Qq, "javascript:alert(1)"),
+            LoginPopupAction::Deny
+        );
+        assert_eq!(
+            login_popup_action(LoginProvider::Netease, "mineradio://login"),
+            LoginPopupAction::Deny
+        );
     }
 
     #[test]

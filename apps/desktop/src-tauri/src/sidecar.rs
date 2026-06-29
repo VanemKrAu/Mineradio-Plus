@@ -551,6 +551,35 @@ pub fn wait_for_health(base_url: &str, deadline: Duration) -> Result<HealthInfo,
 mod tests {
     use super::*;
     use std::io::Write;
+    use std::process::{Child, Command};
+
+    fn spawn_sleeping_test_child() -> Child {
+        if cfg!(target_os = "windows") {
+            Command::new("cmd")
+                .args(["/C", "ping 127.0.0.1 -n 3 > nul"])
+                .spawn()
+                .expect("spawn sleeping child")
+        } else {
+            Command::new("sh")
+                .args(["-c", "sleep 2"])
+                .spawn()
+                .expect("spawn sleeping child")
+        }
+    }
+
+    fn spawn_exiting_test_child() -> Child {
+        if cfg!(target_os = "windows") {
+            Command::new("cmd")
+                .args(["/C", "exit 7"])
+                .spawn()
+                .expect("spawn exiting child")
+        } else {
+            Command::new("sh")
+                .args(["-c", "exit 7"])
+                .spawn()
+                .expect("spawn exiting child")
+        }
+    }
 
     #[test]
     fn allocate_port_returns_nonzero() {
@@ -716,6 +745,78 @@ mod tests {
             vec!["netease".to_string(), "qq".to_string()]
         );
         assert_eq!(snapshot.log_path, "/tmp/logs/sidecar-runtime.log");
+    }
+
+    #[test]
+    fn sidecar_runtime_retains_child_handle_and_replaces_orphan() {
+        let mut runtime = SidecarRuntimeState::new(
+            "http://127.0.0.1:38123".to_string(),
+            PathBuf::from("/tmp/logs/sidecar-runtime.log"),
+        );
+        let first = spawn_sleeping_test_child();
+        let first_id = first.id();
+
+        assert!(sidecar_runtime_mark_spawned(&mut runtime, first).is_none());
+        assert_eq!(runtime.snapshot().pid, Some(first_id));
+
+        let second = spawn_sleeping_test_child();
+        let second_id = second.id();
+        let orphan = sidecar_runtime_mark_spawned(&mut runtime, second);
+        assert_eq!(orphan.as_ref().map(Child::id), Some(first_id));
+        assert!(terminate_sidecar_child(orphan));
+        assert_eq!(runtime.snapshot().pid, Some(second_id));
+
+        assert!(terminate_sidecar_child(sidecar_runtime_mark_stopped(&mut runtime)));
+    }
+
+    #[test]
+    fn sidecar_runtime_child_exit_marks_recovering_for_restart() {
+        let mut runtime = SidecarRuntimeState::new(
+            "http://127.0.0.1:38123".to_string(),
+            PathBuf::from("/tmp/logs/sidecar-runtime.log"),
+        );
+        let child = spawn_exiting_test_child();
+        let orphan = sidecar_runtime_mark_spawned(&mut runtime, child);
+        terminate_sidecar_child(orphan);
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        let mut observed_exit = false;
+        while std::time::Instant::now() < deadline {
+            if sidecar_runtime_child_exited(&mut runtime).expect("child exit check") {
+                observed_exit = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(
+            observed_exit,
+            "sidecar test child exit was not observed within 2 seconds"
+        );
+        assert!(runtime.child.is_none());
+        assert_eq!(runtime.phase, SidecarPhase::Recovering);
+        assert!(runtime
+            .last_error
+            .as_deref()
+            .unwrap_or_default()
+            .contains("sidecar exited with status"));
+    }
+
+    #[test]
+    fn sidecar_runtime_mark_stopped_returns_child_for_shutdown_cleanup() {
+        let mut runtime = SidecarRuntimeState::new(
+            "http://127.0.0.1:38123".to_string(),
+            PathBuf::from("/tmp/logs/sidecar-runtime.log"),
+        );
+        let child = spawn_sleeping_test_child();
+        let orphan = sidecar_runtime_mark_spawned(&mut runtime, child);
+        terminate_sidecar_child(orphan);
+
+        let child = sidecar_runtime_mark_stopped(&mut runtime);
+        assert!(child.is_some());
+        assert_eq!(runtime.phase, SidecarPhase::Stopped);
+        assert!(runtime.child.is_none());
+        assert!(terminate_sidecar_child(child));
+        assert!(!terminate_sidecar_child(None));
     }
 
     #[test]

@@ -20,7 +20,7 @@ export interface SidecarLoggerOptions {
 const DEFAULT_MAX_BYTES = 1024 * 1024;
 const REDACTED = "[redacted]";
 const SENSITIVE_KEY_RE = /cookie|authorization|auth|token|music_u|qm_keyst|qqmusic_key|wxskey|uin|csrf/i;
-const SENSITIVE_VALUE_RE = /MUSIC_U|qm_keyst|qqmusic_key|wxskey|authorization|bearer\s+|cookie\s*[:=]|__csrf/i;
+const SENSITIVE_VALUE_RE = /MUSIC_U|qm_keyst|qqmusic_key|wxskey|authorization|bearer\s+|cookie\s*[:=]|(?:access_token|auth_token|token)\s*[=:]|__csrf/i;
 
 export function sidecarLogFile(): string | null {
   const raw = process.env.MINERADIO_SIDECAR_LOG_FILE;

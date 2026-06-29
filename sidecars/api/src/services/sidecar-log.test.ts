@@ -64,6 +64,15 @@ test("redactLogValue removes cookie and auth fields recursively without changing
   expect(serialized).toContain("ok");
 });
 
+test("redactLogValue removes token-like values in strings without changing safe paths", () => {
+  expect(redactLogValue("/tmp/mineradio/logs/sidecar-runtime.log")).toBe(
+    "/tmp/mineradio/logs/sidecar-runtime.log"
+  );
+  expect(redactLogValue("/tmp/access_token=secret/sidecar-runtime.log")).toBe("[redacted]");
+  expect(redactLogValue("/tmp/auth_token:secret/sidecar-runtime.log")).toBe("[redacted]");
+  expect(redactLogValue("provider failed with token=secret")).toBe("[redacted]");
+});
+
 test("appendSidecarLog writes bounded JSONL entries and creates the parent directory", async () => {
   const path = await tempLogPath();
   await appendSidecarLog(path, { event: "startup", port: 1234 }, { now: () => "2026-06-29T00:00:00.000Z" });
