@@ -544,7 +544,11 @@ mod tests {
         assert_eq!(get("MINERADIO_LOG_DIR"), Some("/tmp/logs".to_string()));
         assert_eq!(
             get("MINERADIO_SIDECAR_LOG_FILE"),
-            Some("/tmp/logs/sidecar-runtime.log".to_string())
+            Some(
+                sidecar_log_path(Path::new("/tmp/logs"))
+                    .to_string_lossy()
+                    .to_string()
+            )
         );
     }
 
