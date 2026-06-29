@@ -44,6 +44,7 @@ export interface VisualEngineHostProps {
 	onShelfPlayPlaylist?: (payload: ShelfPlayPlaylistPayload) => void;
 	onShelfDetailRowClick?: (payload: ShelfDetailRowClickPayload) => void;
 	onShelfOpenDetailContent?: (payload: ShelfOpenDetailContentPayload, writer: ShelfDetailContentListController) => void;
+	onShelfOpenContentChange?: (open: boolean) => void;
 	desktopLyricsMotionRef?: RefObject<DesktopLyricsMotionSnapshot>;
 }
 
@@ -175,6 +176,7 @@ export function VisualEngineHost(props: VisualEngineHostProps): ReactElement {
 	const onShelfPlayPlaylistRef = useRef<((payload: ShelfPlayPlaylistPayload) => void) | undefined>(props.onShelfPlayPlaylist);
 	const onShelfDetailRowClickRef = useRef<((payload: ShelfDetailRowClickPayload) => void) | undefined>(props.onShelfDetailRowClick);
 	const onShelfOpenDetailContentRef = useRef<((payload: ShelfOpenDetailContentPayload, writer: ShelfDetailContentListController) => void) | undefined>(props.onShelfOpenDetailContent);
+	const onShelfOpenContentChangeRef = useRef<((open: boolean) => void) | undefined>(props.onShelfOpenContentChange);
 	const onShelfPaneChangeRef = useRef<((pane: ShelfPane) => void) | undefined>(undefined);
 	const lifecycleRef = useRef<StageLyricsLifecycle | null>(null);
 	const fxStateRef = useRef<Partial<FxState> | undefined>(props.fxState);
@@ -203,6 +205,7 @@ export function VisualEngineHost(props: VisualEngineHostProps): ReactElement {
 	onShelfPlayPlaylistRef.current = props.onShelfPlayPlaylist;
 	onShelfDetailRowClickRef.current = props.onShelfDetailRowClick;
 	onShelfOpenDetailContentRef.current = props.onShelfOpenDetailContent;
+	onShelfOpenContentChangeRef.current = props.onShelfOpenContentChange;
 	onShelfPaneChangeRef.current = setShelfPane;
 
 	useEffect(() => {
@@ -297,6 +300,7 @@ export function VisualEngineHost(props: VisualEngineHostProps): ReactElement {
 		onShelfPlayPlaylistRef,
 		onShelfDetailRowClickRef,
 		onShelfOpenDetailContentRef,
+		onShelfOpenContentChangeRef,
 		onShelfPaneChangeRef,
 		lifecycleRef,
 		desktopLyricsMotionRef: props.desktopLyricsMotionRef,

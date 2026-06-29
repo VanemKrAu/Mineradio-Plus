@@ -785,6 +785,7 @@ export function App({
   const [playlistPanelPinned, setPlaylistPanelPinnedState] = useState(() =>
     readBooleanPreference(PLAYLIST_PANEL_PIN_STORE_KEY, false),
   );
+  const [shelfDetailOpen, setShelfDetailOpen] = useState(false);
   const [sidecarRecoveryState, setSidecarRecoveryState] =
     useState<SidecarRecoveryNoticeState | null>(null);
   const [playbackQuality, setPlaybackQualityState] = useState<PlaybackQuality>(
@@ -952,6 +953,7 @@ export function App({
     hasCurrentTrack: !!currentTrack,
     queueLength: queue.length,
     isPlaying,
+    shelfDetailOpen,
     shelfPinnedOpen: shelfOpen,
   });
   const emptyHomeActive = shouldShowEmptyHome({
@@ -961,6 +963,7 @@ export function App({
     hasCurrentTrack: !!currentTrack,
     queueLength: queue.length,
     isPlaying,
+    shelfDetailOpen,
     shelfPinnedOpen: shelfOpen,
   });
   const homeControlsLocked =
@@ -3115,6 +3118,7 @@ export function App({
           });
           void loader(payload);
         }}
+        onShelfOpenContentChange={setShelfDetailOpen}
         desktopLyricsMotionRef={desktopLyricsMotionRef}
       />
       <div id="ai-depth-chip" className={aiDepthChip.visible ? "show" : ""}>

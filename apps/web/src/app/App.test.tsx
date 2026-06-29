@@ -269,6 +269,50 @@ test("App suppresses baseline Home while shelf is pinned and the Home button res
 	}
 });
 
+test("App suppresses baseline Home while visual shelf detail content is open", async () => {
+	await import("../../../../packages/visual-engine/src/runtime/happy-dom-preload");
+	document.body.className = "";
+	usePlaybackStore.getState().clearQueue();
+	useShelfStore.setState({ open: false, selectedPlaylistId: null });
+
+	let dismissSplash: (() => void) | null = null;
+	let setShelfContentOpen: ((open: boolean) => void) | undefined;
+	function MockSplash(props: SplashHostProps) {
+		dismissSplash = () => props.onDismissed?.();
+		return <div className="visual-splash-root" />;
+	}
+	function MockVisual(props: VisualEngineHostProps & { onShelfOpenContentChange?: (open: boolean) => void }) {
+		setShelfContentOpen = props.onShelfOpenContentChange;
+		return <div id="visual-host" />;
+	}
+	const host = document.createElement("div");
+	document.body.appendChild(host);
+	const root = createRoot(host);
+
+	try {
+		flushSync(() => root.render(<App SplashComponent={MockSplash} VisualComponent={MockVisual} />));
+		flushSync(() => dismissSplash?.());
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(document.body.classList.contains("empty-home-active")).toBe(true);
+		expect(typeof setShelfContentOpen).toBe("function");
+
+		flushSync(() => setShelfContentOpen?.(true));
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(document.body.classList.contains("empty-home-active")).toBe(false);
+
+		flushSync(() => setShelfContentOpen?.(false));
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(document.body.classList.contains("empty-home-active")).toBe(true);
+	} finally {
+		root.unmount();
+		host.remove();
+		document.body.className = "";
+		usePlaybackStore.getState().clearQueue();
+		useShelfStore.setState({ open: false, selectedPlaylistId: null });
+	}
+});
+
 function sidecarStatus(overrides: Partial<SidecarStatus> = {}): SidecarStatus {
 	return {
 		phase: "ready",

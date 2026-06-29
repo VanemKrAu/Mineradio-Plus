@@ -86,6 +86,7 @@ export interface VisualEngineRefs {
 	onShelfPlayPlaylistRef?: RefObject<((payload: ShelfPlayPlaylistPayload) => void) | undefined>;
 	onShelfDetailRowClickRef?: RefObject<((payload: ShelfDetailRowClickPayload) => void) | undefined>;
 	onShelfOpenDetailContentRef?: RefObject<((payload: ShelfOpenDetailContentPayload, writer: ShelfDetailContentListController) => void) | undefined>;
+	onShelfOpenContentChangeRef?: RefObject<((open: boolean) => void) | undefined>;
 	onShelfPaneChangeRef?: RefObject<((pane: ShelfPane) => void) | undefined>;
 	lifecycleRef: RefObject<StageLyricsLifecycle | null>;
 	desktopLyricsMotionRef?: RefObject<StageLyricsMotionSnapshot>;
@@ -564,6 +565,7 @@ export function useVisualEngine(refs: VisualEngineRefs): void {
 			});
 			let syncedShelfItemsVersion = refs.shelfItemsVersionRef.current;
 			let syncedBeatMapVersion = refs.beatMapVersionRef?.current ?? 0;
+			let syncedShelfContentOpen = false;
 			shelfManager.setData(refs.shelfItemsRef.current);
 			const beatMapScheduler = createBeatMapScheduler({
 				scheduleCameraBeat: (beat) => cinema.applyBeat(Math.max(Number(beat.strength) || 0, Number(beat.impact) || 0), true),
@@ -685,6 +687,11 @@ export function useVisualEngine(refs: VisualEngineRefs): void {
 					shelfManager.setData(refs.shelfItemsRef.current);
 				}
 				shelfStep(ctx);
+				const shelfContentOpen = shelfManager.hasOpenContent();
+				if (shelfContentOpen !== syncedShelfContentOpen) {
+					syncedShelfContentOpen = shelfContentOpen;
+					refs.onShelfOpenContentChangeRef?.current?.(shelfContentOpen);
+				}
 				const connectorVisible =
 					shelfManager.getMode() === "stage" &&
 					shelfManager.getShelfVisibility() > 0 &&
@@ -848,5 +855,5 @@ export function useVisualEngine(refs: VisualEngineRefs): void {
 			handles = null;
 			refs.lifecycleRef.current = null;
 		};
-	}, [refs.hostRef, refs.audioElementRef, refs.positionRef, refs.isPlayingRef, refs.lyricLinesRef, refs.shelfItemsRef, refs.shelfItemsVersionRef, refs.splashActiveRef, refs.homeActiveRef, refs.shelfModeRef, refs.shelfCameraModeRef, refs.shelfPresenceRef, refs.shelfMergeCollectionsRef, refs.shelfMineCountRef, refs.shelfFavCountRef, refs.wallpaperSafeRef, refs.secondaryLeftDisplaySeamGuardRef, refs.coverUrlRef, refs.coverUrlVersionRef, refs.beatMapKeyRef, refs.beatMapRef, refs.beatMapVersionRef, refs.onShelfPlayQueueIndexRef, refs.onShelfPlayPlaylistRef, refs.onShelfDetailRowClickRef, refs.onShelfOpenDetailContentRef, refs.onShelfPaneChangeRef, refs.lifecycleRef, refs.coverResolution, refs.onShelfModeChange]);
+	}, [refs.hostRef, refs.audioElementRef, refs.positionRef, refs.isPlayingRef, refs.lyricLinesRef, refs.shelfItemsRef, refs.shelfItemsVersionRef, refs.splashActiveRef, refs.homeActiveRef, refs.shelfModeRef, refs.shelfCameraModeRef, refs.shelfPresenceRef, refs.shelfMergeCollectionsRef, refs.shelfMineCountRef, refs.shelfFavCountRef, refs.wallpaperSafeRef, refs.secondaryLeftDisplaySeamGuardRef, refs.coverUrlRef, refs.coverUrlVersionRef, refs.beatMapKeyRef, refs.beatMapRef, refs.beatMapVersionRef, refs.onShelfPlayQueueIndexRef, refs.onShelfPlayPlaylistRef, refs.onShelfDetailRowClickRef, refs.onShelfOpenDetailContentRef, refs.onShelfOpenContentChangeRef, refs.onShelfPaneChangeRef, refs.lifecycleRef, refs.coverResolution, refs.onShelfModeChange]);
 }
