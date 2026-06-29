@@ -653,9 +653,60 @@ test("update applies baseline wallpaper camera-lock layout and distance when she
 	const lockFit = Math.max(0.42, Math.min(1, viewportFit, 0.80 / layoutScale));
 	const firstFrameLockFitScale = 1 + (lockFit - 1) * (lockFit < 1 ? 0.18 : 0.10);
 	expect(group.scale.x).toBeCloseTo(layoutScale * firstFrameLockFitScale, 6);
-	expect(group.position.x).toBeCloseTo(layoutX * 0.24, 6);
-	expect(group.position.y).toBeCloseTo(layoutY * 0.24, 6);
-	expect(group.position.z).toBeCloseTo((-distance) * 0.24, 6);
+	expect(group.position.x).toBeCloseTo(layoutX * 0.42, 6);
+	expect(group.position.y).toBeCloseTo(layoutY * 0.42, 6);
+	expect(group.position.z).toBeCloseTo((-distance) * 0.42, 6);
+	lifecycle.dispose();
+});
+
+test("update applies baseline wallpaper camera-lock easing when shelf is not dimming wallpaper", async () => {
+	const scene = makeFakeScene();
+	const camera = makeFakeCamera({ x: 0, y: 0, z: 0 });
+	const lifecycle = createStageLyricsLifecycle({
+		scene: scene as never,
+		threeFactory: makeFakeThree(),
+		gsapProvider: () => makeFakeGsap([]),
+		customEaseProvider: async () => null,
+		lyricLinesSupplier: () => [] as never,
+		currentTimeSupplier: () => 0,
+		isPlayingSupplier: () => true,
+		audioDurationSupplier: () => 9999,
+		dotTexture: makeFakeDotTexture(),
+		particleLyricsFlagSupplier: () => true,
+		lyricGlowStrengthSupplier: () => 0,
+		lyricGlowBeatFlagSupplier: () => false,
+		lyricSunEnergyHolder: { get: () => 0, set: () => {} },
+		lyricLayoutOptionsSupplier: () => ({
+			lyricCameraLock: true,
+			lyricScale: 1,
+			lyricOffsetX: 0.2,
+			lyricOffsetY: 0.1,
+			lyricOffsetZ: 0,
+			lyricTiltX: 12,
+			lyricTiltY: -8,
+			preset: 5,
+		}),
+		getShelfMode: () => "side",
+		getShelfHasOpenContent: () => false,
+		getShelfVisibility: () => 0,
+		cameraSupplier: () => camera as never,
+		rand: () => 0.35,
+	});
+	await lifecycle.mount(scene as never);
+	lifecycle.update(makeCtx(0, 0.1));
+	const group = lifecycle.group as unknown as {
+		position: { x: number; y: number; z: number };
+		quaternion: { x: number; y: number; z: number; w: number };
+	};
+	const layoutX = 0.2;
+	const layoutY = 0.1 + 0.08;
+	const layoutZ = 1.15;
+	const targetZ = -(4.85 + layoutZ);
+	expect(group.position.x).toBeCloseTo(layoutX * 0.34, 6);
+	expect(group.position.y).toBeCloseTo(layoutY * 0.34, 6);
+	expect(group.position.z).toBeCloseTo(targetZ * 0.34, 6);
+	const targetQuatX = Math.sin((12 * Math.PI / 180) / 2) * Math.cos((-8 * Math.PI / 180) / 2);
+	expect(group.quaternion.x).toBeCloseTo(targetQuatX * 0.36, 6);
 	lifecycle.dispose();
 });
 

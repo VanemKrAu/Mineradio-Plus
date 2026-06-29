@@ -298,7 +298,11 @@ export function createStageLyricsLifecycle(opts: StageLyricsLifecycleOpts): Stag
 		return getShelfVisibility() > 0.24;
 	}
 
-	function getLyricLayoutOptions(): Required<LyricLayoutOptions> & { lockBaseDistance: number } {
+	function getLyricLayoutOptions(): Required<LyricLayoutOptions> & {
+		lockBaseDistance: number;
+		wallpaperLyricLock: boolean;
+		wallpaperShelfLyrics: boolean;
+	} {
 		const raw = opts.lyricLayoutOptionsSupplier?.() ?? {};
 		const layout = {
 			lyricCameraLock: !!raw.lyricCameraLock,
@@ -310,10 +314,14 @@ export function createStageLyricsLifecycle(opts: StageLyricsLifecycleOpts): Stag
 			lyricTiltY: clamp(Number(raw.lyricTiltY) || 0, -42, 42),
 			preset: Number(raw.preset) || 0,
 			lockBaseDistance: 4.85,
+			wallpaperLyricLock: false,
+			wallpaperShelfLyrics: false,
 		};
 		const wallpaperLyricLock = layout.preset === 5 && layout.lyricCameraLock;
 		if (wallpaperLyricLock) {
 			const dimForShelf = shouldDimWallpaperForShelf();
+			layout.wallpaperLyricLock = true;
+			layout.wallpaperShelfLyrics = dimForShelf;
 			layout.lyricScale *= dimForShelf ? 0.60 : 0.84;
 			layout.lyricOffsetX = clamp(layout.lyricOffsetX + (dimForShelf ? -1.34 : 0), -2, 2);
 			layout.lyricOffsetY = clamp(layout.lyricOffsetY + (dimForShelf ? -0.04 : 0.08), -1.2, 1.35);
@@ -437,10 +445,12 @@ export function createStageLyricsLifecycle(opts: StageLyricsLifecycleOpts): Stag
 			const x = camera.position.x + forward.x * layout.lockBaseDistance + right.x * layout.lyricOffsetX + up.x * layout.lyricOffsetY + forward.x * layout.lyricOffsetZ;
 			const y = camera.position.y + forward.y * layout.lockBaseDistance + right.y * layout.lyricOffsetX + up.y * layout.lyricOffsetY + forward.y * layout.lyricOffsetZ;
 			const z = camera.position.z + forward.z * layout.lockBaseDistance + right.z * layout.lyricOffsetX + up.z * layout.lyricOffsetY + forward.z * layout.lyricOffsetZ;
-			if (group.position?.lerp) group.position.lerp({ x, y, z }, 0.24);
+			const positionEase = layout.wallpaperLyricLock ? (layout.wallpaperShelfLyrics ? 0.42 : 0.34) : 0.24;
+			const quaternionEase = layout.wallpaperLyricLock ? (layout.wallpaperShelfLyrics ? 0.44 : 0.36) : 0.22;
+			if (group.position?.lerp) group.position.lerp({ x, y, z }, positionEase);
 			else setGroupPosition(group, x, y, z);
 			const targetQuat = multiplyQuaternions(q, tiltQuaternionYXZ(layout.lyricTiltX, layout.lyricTiltY));
-			if (group.quaternion?.slerp) group.quaternion.slerp(targetQuat, 0.22);
+			if (group.quaternion?.slerp) group.quaternion.slerp(targetQuat, quaternionEase);
 			else if (group.quaternion) {
 				group.quaternion.x = targetQuat.x;
 				group.quaternion.y = targetQuat.y;
