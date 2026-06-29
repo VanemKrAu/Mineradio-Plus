@@ -14,7 +14,7 @@
 - GSAP 只使用可合法分发的标准能力，不引入会员/闭源插件。
 - NeteaseCloudMusicApi 继续保留原 license 和 NOTICE。
 - 新增依赖必须进入 license allowlist。
-- AI depth 为对齐 Electron baseline 使用远程 `@xenova/transformers` jsDelivr runtime 和 HuggingFace 模型来源；公开发布前必须复核 runtime/model 许可、隐私/网络说明和 WebView2 CSP 行为。
+- AI depth 为对齐 Electron baseline 使用远程 `@xenova/transformers` jsDelivr runtime 和 HuggingFace 模型来源；`@xenova/transformers@2.17.2` 已按 npm metadata 复核为 Apache-2.0，基础模型 `LiheYoung/depth-anything-small-hf` 已按 HuggingFace metadata 复核为 Apache-2.0，`Xenova/depth-anything-small-hf` 是 Transformers.js/ONNX 转换仓库并记录 `base_model=LiheYoung/depth-anything-small-hf`。远程模型仍需 WebView2 真实下载/推理/视觉效果手测后才能关闭能力 gate。
 
 ## License Allowlist
 
@@ -70,6 +70,7 @@
 - npm transitive full audit：2026-06-29 code-side complete；`npm run license-transitive:check` 基于当前 workspace manifests、Bun `.bun` 安装目录和实际可安装依赖闭包通过。若后续新增 npm 依赖，必须重新运行并更新本 gate。
 - GSAP standard-only final check：2026-06-29 code-side complete；源码扫描只发现 `gsap` 与标准包 `gsap/CustomEase`，未发现 Club/member/闭源插件、私有插件或未授权商业资产。若后续新增 GSAP 插件 import，必须重新审核。
 - Direct dependency allowlist enforcement：`npm run license:check` 会检查 Tauri 迁移目标 workspace manifests 和 `apps/desktop/src-tauri/Cargo.toml` 的直接依赖，要求它们全部进入 Dependency Audit 表且 Decision 不为 `待审核`。该检查不替代 Rust/npm transitive full audit。
+- AI depth remote source enforcement：`npm run ai-depth-remote-policy:check` 会静态锁定 `@xenova/transformers@2.17.2` jsDelivr runtime、`Xenova/depth-anything-small-hf` HuggingFace model id、`allowLocalModels=false`、ONNX WASM `numThreads=1`、remote source license/provenance 审核记录、隐私说明和 release notes 远程下载披露。该检查不替代 WebView2 真实模型下载/推理/视觉效果手测。
 - packaged notices inclusion：`npm run packaged-notices:check` 会静态检查 Tauri bundle resources 已声明 `LICENSE`、`NOTICE.md`、`THIRD_PARTY_NOTICES.md`、`PRIVACY.md`、`SECURITY.md`；公开发布前仍必须验证 Windows 安装包/安装后目录真实包含这些文件及必要第三方 license 文本。
 - release notes wording：`npm run release-notes-policy:check` 会静态检查 `docs/migration/release-notes-template.md` 具备 GPL-3.0 二开/fork/rewrite、非网易云音乐/QQ 音乐/原 Mineradio 官方身份、`zzstar101/Mineradio`、旧 Electron patch JSON 不迁移和 detection-only updater 限制措辞；真实 GitHub Release notes 必须以该模板为基准并在发布后核验，才能关闭此 gate。
 - updater signature/release artifact relation：`npm run updater-policy:check` 会在 B2 pubkey 为空时静态锁定 detection-only：Tauri updater endpoint 仍指向 `zzstar101/Mineradio`，Rust/web 不暴露 download/install helper，UI 保留 `signature-key-missing` 不可安装文案；公开发布前仍必须在最终发布路径下明确 Tauri updater manifest、签名字段、公钥配置、安装包资产和 release 上传资产之间的关系。若继续 detection-only，不得展示可安装更新为已通过 gate，且需在 release notes/UI 中说明。
@@ -119,7 +120,7 @@
 | gsap | npm | Standard no-charge license | animation timelines/easing; code imports `gsap` and `gsap/CustomEase` from the standard npm package only | Club/member/闭源插件禁用；direct usage scan found no Club plugin imports, but packaged notices/release wording remain tracked separately | 通过（direct standard package） |
 | GSAP | vendor/baseline reference | Standard no-charge license | Electron baseline `public/vendor/gsap.min.js` reference and legacy runtime | Club/member/闭源插件禁用；public release still needs packaged notices inclusion verification | 通过（baseline reference） |
 | happy-dom | npm devDependency | MIT | visual-engine DOM-like test environment | MIT 兼容 | 通过 |
-| @xenova/transformers + Xenova/depth-anything-small-hf | remote runtime/model source | 发布前复核 | AI depth baseline parity：jsDelivr runtime + HuggingFace model 下载，不写入 npm manifest | 远程执行/模型下载需要 release notes/privacy/CSP 说明；不作为通用 CDN 放行 | 记录（source allowance；公开发布前复核） |
+| @xenova/transformers + Xenova/depth-anything-small-hf | remote runtime/model source | Runtime Apache-2.0；base model Apache-2.0；Xenova ONNX conversion records base_model=LiheYoung/depth-anything-small-hf | AI depth baseline parity：jsDelivr runtime + HuggingFace model 下载，不写入 npm manifest | 远程 runtime/model 下载已写入 release notes/privacy/CSP 说明；推理在本地 WebView2 执行，不上传封面；不作为通用 CDN 放行；真实 WebView2 下载/推理证据仍由 capability gate 跟踪 | 通过（remote source reviewed；WebView2 runtime evidence pending） |
 | jsososo/qq-music-api（npm `qq-music-api`） | npm | GPL-3.0 | QQ provider | 与本项目同 GPL-3.0，组合作品可分发 | 通过 |
 | axios ^0.21.2 | npm [transitive via qq-music-api] | MIT | HTTP 客户端 | MIT 兼容 | 通过（transitive） |
 | cheerio ^1.0.0-rc.3 | npm [transitive via qq-music-api] | MIT | HTML 解析 | MIT 兼容 | 通过（transitive） |
