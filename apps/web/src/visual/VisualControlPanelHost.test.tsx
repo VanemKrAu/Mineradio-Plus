@@ -138,6 +138,59 @@ test("VisualControlPanelHost opens the panel and emits baseline preset/setting c
   container.remove();
 });
 
+test("VisualControlPanelHost mirrors baseline fx fab auto-hide preference and peek hot-zone", async () => {
+  await import("../../../../packages/visual-engine/src/runtime/happy-dom-preload");
+  (globalThis as unknown as { localStorage: Storage }).localStorage = window.localStorage;
+  localStorage.clear();
+  document.body.className = "";
+  const notices: string[] = [];
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  Object.defineProperty(window, "innerWidth", { value: 1280, configurable: true });
+  Object.defineProperty(window, "innerHeight", { value: 720, configurable: true });
+  const root = createRoot(container);
+  root.render(
+    React.createElement(VisualControlPanelHost, {
+      onNotice: (message) => notices.push(message),
+    }),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const toggle = container.querySelector("#fx-fab-hide-btn") as HTMLButtonElement;
+  expect(toggle.textContent).toBe("‹");
+  toggle.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  expect(localStorage.getItem("mineradio-fx-fab-auto-hide-v1")).toBe("1");
+  expect(document.body.classList.contains("fx-fab-auto-hide")).toBe(true);
+  expect(toggle.textContent).toBe("›");
+  expect(toggle.title).toBe("取消自动隐藏视觉控制台");
+  expect(notices).toEqual(["视觉控制台按钮已自动隐藏"]);
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const pointerMove = new window.MouseEvent("mousemove", {
+    clientX: window.innerWidth - 20,
+    clientY: window.innerHeight - 20,
+  });
+  for (let i = 0; i < 5 && !document.body.classList.contains("fx-fab-peek"); i += 1) {
+    window.dispatchEvent(pointerMove);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  expect(document.body.classList.contains("fx-fab-peek")).toBe(true);
+
+  toggle.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(localStorage.getItem("mineradio-fx-fab-auto-hide-v1")).toBe("0");
+  expect(document.body.classList.contains("fx-fab-auto-hide")).toBe(false);
+  expect(document.body.classList.contains("fx-fab-peek")).toBe(false);
+  expect(notices).toEqual(["视觉控制台按钮已自动隐藏", "视觉控制台按钮已固定显示"]);
+
+  root.unmount();
+  container.remove();
+  localStorage.clear();
+  document.body.className = "";
+});
+
 test("VisualControlPanelHost emits baseline UI accent and visual tint color controls", async () => {
   await import("../../../../packages/visual-engine/src/runtime/happy-dom-preload");
   const calls: string[] = [];

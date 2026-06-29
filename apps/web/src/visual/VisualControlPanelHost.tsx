@@ -1,5 +1,7 @@
-import { useCallback, useRef, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 import { FX_DEFAULTS, type FxState } from "@mineradio/visual-engine";
+
+const FX_FAB_AUTO_HIDE_STORE_KEY = "mineradio-fx-fab-auto-hide-v1";
 
 const PRESETS = [
   { id: 0, name: "Emily", desc: "封面粒子 · 歌词舞台" },
@@ -320,6 +322,24 @@ export interface VisualControlPanelHostProps {
   onNumberSettingChange?: (key: keyof FxState, value: number) => void;
   onBooleanSettingChange?: (key: keyof FxState, value: boolean) => void;
   onStringSettingChange?: (key: keyof FxState, value: string) => void;
+  onNotice?: (message: string) => void;
+}
+
+function readFxFabAutoHidePreference(): boolean {
+  if (typeof localStorage === "undefined") return false;
+  try {
+    return localStorage.getItem(FX_FAB_AUTO_HIDE_STORE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function saveFxFabAutoHidePreference(value: boolean): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(FX_FAB_AUTO_HIDE_STORE_KEY, value ? "1" : "0");
+  } catch {
+  }
 }
 
 function numberValue(
@@ -437,7 +457,35 @@ export function VisualControlPanelHost(
   props: VisualControlPanelHostProps,
 ): ReactElement {
   const [open, setOpen] = useState(false);
+  const [autoHide, setAutoHide] = useState(readFxFabAutoHidePreference);
+  const [peek, setPeek] = useState(false);
   const preset = Math.max(0, Math.min(6, Math.round(props.preset ?? 0)));
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.body.classList.toggle("fx-fab-auto-hide", autoHide);
+    document.body.classList.toggle("fx-fab-peek", autoHide && (peek || open));
+    return () => {
+      document.body.classList.remove("fx-fab-auto-hide", "fx-fab-peek");
+    };
+  }, [autoHide, open, peek]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!autoHide) {
+      setPeek(false);
+      return;
+    }
+    const updateFromPointer = (event: MouseEvent) => {
+      const nearBottomRight = event.clientX > window.innerWidth - 126 && event.clientY > window.innerHeight - 158;
+      setPeek(nearBottomRight);
+    };
+    const clearPeek = () => setPeek(false);
+    window.addEventListener("mousemove", updateFromPointer);
+    window.addEventListener("mouseleave", clearPeek);
+    return () => {
+      window.removeEventListener("mousemove", updateFromPointer);
+      window.removeEventListener("mouseleave", clearPeek);
+    };
+  }, [autoHide]);
   const changePreset = useCallback(
     (next: number) => {
       props.onPresetChange?.(next);
@@ -482,6 +530,13 @@ export function VisualControlPanelHost(
     },
     [props],
   );
+  const toggleAutoHide = useCallback(() => {
+    const next = !autoHide;
+    saveFxFabAutoHidePreference(next);
+    setAutoHide(next);
+    setPeek(false);
+    props.onNotice?.(next ? "视觉控制台按钮已自动隐藏" : "视觉控制台按钮已固定显示");
+  }, [autoHide, props]);
   const resetUiAccentColor = useCallback(() => {
     props.onStringSettingChange?.("uiAccentColor", FX_DEFAULTS.uiAccentColor);
   }, [props]);
@@ -532,11 +587,14 @@ export function VisualControlPanelHost(
       </button>
       <button
         id="fx-fab-hide-btn"
+        className={autoHide ? "on" : ""}
         type="button"
-        title="自动隐藏视觉控制台"
-        aria-label="自动隐藏视觉控制台"
+        title={autoHide ? "取消自动隐藏视觉控制台" : "自动隐藏视觉控制台"}
+        aria-label={autoHide ? "取消自动隐藏视觉控制台" : "自动隐藏视觉控制台"}
+        aria-pressed={autoHide}
+        onClick={toggleAutoHide}
       >
-        ‹
+        {autoHide ? "›" : "‹"}
       </button>
       <div id="fx-panel" className={open ? "show" : ""}>
         <div className="fx-head">

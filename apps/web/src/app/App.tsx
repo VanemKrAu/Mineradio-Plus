@@ -2909,6 +2909,7 @@ export function App({
         onNumberSettingChange={updateVisualNumberSetting}
         onBooleanSettingChange={updateVisualBooleanSetting}
         onStringSettingChange={updateVisualStringSetting}
+        onNotice={showNotice}
       />
       <EmptyHomeHost
         discover={homeDiscover}
