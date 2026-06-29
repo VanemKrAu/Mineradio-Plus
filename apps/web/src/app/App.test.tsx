@@ -98,6 +98,12 @@ test("App keeps the empty-home music page mounted behind the splash gate", () =>
 	expect(html).toContain("每日推荐");
 });
 
+test("App keeps hidden wallpaper capability placeholder copy out of the product shell", () => {
+	const html = renderToStaticMarkup(React.createElement(App));
+	expect(html).not.toContain("壁纸模式开发中");
+	expect(html).not.toContain('id="t-wallpaperMode"');
+});
+
 test("App unmounts SplashHost after splash dismissed instead of leaving hidden splash listeners alive", async () => {
 	await import("../../../../packages/visual-engine/src/runtime/happy-dom-preload");
 	const host = document.createElement("div");

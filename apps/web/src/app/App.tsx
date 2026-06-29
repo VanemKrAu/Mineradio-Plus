@@ -1391,7 +1391,6 @@ export function App({
       saveVisualFxToStorage();
       if (key === "shelfShowPodcasts" || key === "shelfMergeCollections")
         saveShelfSettingsToStorage();
-      if (key === "wallpaperMode") showToast("壁纸模式开发中，暂不可用");
     },
     [
       setShelfMergeCollections,
