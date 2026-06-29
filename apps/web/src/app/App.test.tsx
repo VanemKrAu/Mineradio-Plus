@@ -97,8 +97,8 @@ test("App keeps the empty-home music page mounted behind the splash gate", () =>
 	expect(html).toContain('id="bottom-bar"');
 	expect(html).toContain('id="user-btn"');
 	expect(html).toContain('id="update-shell"');
-	expect(html).toContain('id="home-weather-kicker"');
-	expect(html).toContain("我的音乐库");
+	expect(html).toContain("🚧此处施工，敬请期待🚧");
+	expect(html).not.toContain('id="home-weather-kicker"');
 	expect(html).toContain("展开播放器控制台");
 	expect(html).toContain("每日推荐");
 });

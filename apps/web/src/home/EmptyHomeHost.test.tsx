@@ -8,29 +8,23 @@ import { EmptyHomeHost, buildHomeWaveFrame } from "./EmptyHomeHost";
 test("EmptyHomeHost renders the baseline empty-home music landing structure", () => {
 	const html = renderToStaticMarkup(React.createElement(EmptyHomeHost));
 	expect(html).toContain('id="empty-home"');
-	expect(html).toContain('id="home-weather-kicker"');
-	expect(html).toContain("Mineradio · Your Library");
-	expect(html).toContain('id="home-weather-title"');
-	expect(html).toContain("我的音乐库");
-	expect(html).toContain('id="home-subtitle"');
-	expect(html).toContain("登录后会把你的歌单、常听歌手和最近播放放在这里；也可以直接搜索或导入本地音乐。");
-	expect(html).toContain('id="home-weather-meta"');
-	expect(html).toContain('class="home-quick-row"');
-	expect(html).toContain('class="home-visual generated"');
-	expect(html).toContain('id="home-wave-track"');
-	expect(html).toContain('id="home-mosaic"');
-	expect(html).toContain('class="home-mosaic-cell"');
+	expect(html).toContain('class="home-hero-inner home-construction-inner"');
+	expect(html).toContain("🚧此处施工，敬请期待🚧");
 	expect(html).toContain("展开播放器控制台");
 	expect(html).toContain('class="home-grid"');
 	expect(html).toContain("我的歌单");
 	expect(html).toContain("每日推荐");
 	expect(html).toContain("推荐歌曲");
 	expect(html).toContain('id="home-tile-row"');
-	expect(html).not.toContain("🚧此处施工，敬请期待🚧");
+	expect(html).not.toContain('id="home-weather-kicker"');
+	expect(html).not.toContain("Mineradio · Your Library");
+	expect(html).not.toContain('class="home-quick-row"');
+	expect(html).not.toContain('class="home-visual generated"');
+	expect(html).not.toContain('id="home-mosaic"');
 	expect(html).not.toContain('class="home-tile-action"');
 });
 
-test("EmptyHomeHost switches the baseline hero subtitle for logged-in home", () => {
+test("EmptyHomeHost keeps the baseline construction hero even after logged-in Home data arrives", () => {
 	const html = renderToStaticMarkup(React.createElement(EmptyHomeHost, {
 		discover: {
 			loggedIn: true,
@@ -43,52 +37,13 @@ test("EmptyHomeHost switches the baseline hero subtitle for logged-in home", () 
 		},
 	}));
 
-	expect(html).toContain("从你的歌单、最近播放和常听歌手开始，天气电台放在需要氛围的时候再开。");
-	expect(html).not.toContain("登录后会把你的歌单、常听歌手和最近播放放在这里");
-});
-
-test("EmptyHomeHost renders baseline weather meta pills", () => {
-	const html = renderToStaticMarkup(React.createElement(EmptyHomeHost, {
-		weatherRadio: {
-			ok: true,
-			weather: {
-				provider: "open-meteo",
-				location: { name: "上海", country: "中国", admin1: "", latitude: 31.23, longitude: 121.47, timezone: "Asia/Shanghai", fallback: false },
-				label: "雨",
-				weatherCode: 61,
-				temperature: 22.4,
-				apparentTemperature: 21.6,
-				humidity: 88,
-				precipitation: 1,
-				cloudCover: 90,
-				windSpeed: 6,
-				windGusts: 10,
-				isDay: 1,
-				time: "",
-				updatedAt: 1,
-				error: "",
-				mood: { key: "rain", title: "雨天电台", tagline: "留一点潮湿的空间给旋律", energy: 0.38, warmth: 0.42, focus: 0.64, melancholy: 0.66, keywords: ["雨天 R&B"] },
-			},
-			radio: {
-				title: "雨天电台",
-				subtitle: "留一点潮湿的空间给旋律",
-				seedQueries: ["雨天 R&B"],
-				updatedAt: 1,
-				songs: [],
-			},
-		},
-	}));
-
-	expect(html).toContain('<span class="home-weather-pill">上海</span>');
-	expect(html).toContain('<span class="home-weather-pill">雨 · 22°</span>');
-	expect(html).toContain('<span class="home-weather-pill">体感 22°</span>');
-	expect(html).toContain('<span class="home-weather-pill">湿度 88%</span>');
+	expect(html).toContain("🚧此处施工，敬请期待🚧");
+	expect(html).not.toContain("从你的歌单、最近播放和常听歌手开始，天气电台放在需要氛围的时候再开。");
 });
 
 test("EmptyHomeHost marks baseline Home loading placeholders with skeleton shimmer", () => {
 	const html = renderToStaticMarkup(React.createElement(EmptyHomeHost, { loading: true }));
 
-	expect(html).toContain("home-mosaic-cell home-skeleton");
 	expect(html).toContain("home-tile home-skeleton");
 });
 
@@ -109,7 +64,7 @@ test("buildHomeWaveFrame follows baseline 24 bar smoothed audio fallback", () =>
 	expect(frame.bars.every((bar) => bar.height >= 4 && bar.opacity >= 0.32 && bar.opacity <= 1)).toBe(true);
 });
 
-test("EmptyHomeHost routes baseline hero quick chips", async () => {
+test("EmptyHomeHost routes the baseline construction console chip", async () => {
 	await import("../../../../packages/visual-engine/src/runtime/happy-dom-preload");
 	const calls: string[] = [];
 	const host = document.createElement("div");
@@ -117,20 +72,12 @@ test("EmptyHomeHost routes baseline hero quick chips", async () => {
 	const root = createRoot(host);
 
 	flushSync(() => root.render(<EmptyHomeHost
-		onSearchFocus={() => calls.push("search")}
-		onOpenLibrary={() => calls.push("library")}
-		onUpload={() => calls.push("upload")}
-		onOpenPodcastSearch={() => calls.push("podcast")}
 		onOpenConsole={() => calls.push("console")}
 	/>));
 
-	(host.querySelector('[data-home-chip="search"]') as HTMLButtonElement).click();
-	(host.querySelector('[data-home-chip="library"]') as HTMLButtonElement).click();
-	(host.querySelector('[data-home-chip="local"]') as HTMLButtonElement).click();
-	(host.querySelector('[data-home-chip="podcast"]') as HTMLButtonElement).click();
 	(host.querySelector('[data-home-chip="console"]') as HTMLButtonElement).click();
 
-	expect(calls).toEqual(["search", "library", "upload", "podcast", "console"]);
+	expect(calls).toEqual(["console"]);
 	root.unmount();
 	host.remove();
 });

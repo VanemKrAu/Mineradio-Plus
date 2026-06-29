@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from "react";
+import { type CSSProperties, type ReactElement } from "react";
 import type { DiscoverHomeResponse, PlaylistSummary, PodcastRadio, Track, WeatherRadioResponse } from "@mineradio/shared";
 
 export interface EmptyHomeHostProps {
@@ -233,27 +233,6 @@ function homeTileKey(tile: HomeTile, index: number): string {
 	return `${tile.kind}:${index}:${tile.title}`;
 }
 
-function buildMosaicCovers(tiles: HomeTile[]): (string | undefined)[] {
-	const covers = tiles.map((tile) => homeTileCover(tile)).filter((cover): cover is string => !!cover);
-	return [0, 1, 2].map((index) => covers[index] || covers[(index + 1) % Math.max(1, covers.length)]);
-}
-
-function weatherMeta(weatherRadio: WeatherRadioResponse | null | undefined): string[] {
-	const weather = weatherRadio?.weather ?? null;
-	const location = weather?.location?.name || "上海";
-	if (!weather) {
-		return [location, weatherRadio && !weatherRadio.ok ? "天气暂不可用" : "正在整理天气"];
-	}
-	const meta = [
-		location,
-		`${weather.label} · ${Math.round(weather.temperature || 0)}°`,
-		`体感 ${Math.round(weather.apparentTemperature || weather.temperature || 0)}°`,
-	];
-	const humidity = Number(weather.humidity);
-	if (Number.isFinite(humidity)) meta.push(`湿度 ${Math.round(humidity)}%`);
-	return meta;
-}
-
 function handleTileAction(props: EmptyHomeHostProps, tile: HomeTile): void {
 	if (tile.kind === "login") props.onOpenLogin?.();
 	else if (tile.kind === "search") props.onSearchQuery?.(tile.query ?? "") ?? props.onSearchFocus?.();
@@ -279,19 +258,7 @@ export function EmptyHomeHost(props: EmptyHomeHostProps): ReactElement {
 	const firstPodcast = discover?.podcasts[0] ?? null;
 	const listenSummary = props.listenSummary ?? null;
 	const tiles = buildHomeTiles(discover, props.weatherRadio, listenSummary);
-	const active = props.active !== false;
 	const loading = props.loading === true;
-	const waveSmoothRef = useRef<number[]>([]);
-	const [waveBars, setWaveBars] = useState<HomeWaveBar[]>(() => {
-		const frame = buildHomeWaveFrame({
-			timeMs: 0,
-			isPlaying: props.isPlaying,
-			positionMs: props.positionMs,
-			durationMs: props.durationMs,
-		});
-		waveSmoothRef.current = frame.smooth;
-		return frame.bars;
-	});
 	const libraryCover = firstPlaylist?.coverUrl || daily?.coverUrl;
 	const dailyCover = daily?.coverUrl;
 	const privateCover = privateSong?.coverUrl || daily?.coverUrl || firstPlaylist?.coverUrl;
@@ -301,81 +268,16 @@ export function EmptyHomeHost(props: EmptyHomeHostProps): ReactElement {
 	const continueCover = recentTrack?.coverUrl || firstPlaylist?.coverUrl;
 	const profileCover = topSong?.coverUrl || topArtist?.coverUrl || firstPodcast?.coverUrl;
 	const moreCover = thirdSong?.coverUrl || topSong?.coverUrl || recentTrack?.coverUrl || firstPodcast?.coverUrl;
-	const mosaicCovers = buildMosaicCovers(tiles);
-	const heroSubtitle = loggedOut
-		? "登录后会把你的歌单、常听歌手和最近播放放在这里；也可以直接搜索或导入本地音乐。"
-		: "从你的歌单、最近播放和常听歌手开始，天气电台放在需要氛围的时候再开。";
-
-	useEffect(() => {
-		if (!active) return;
-		let cancelled = false;
-		let timer: ReturnType<typeof setTimeout> | null = null;
-		const tick = () => {
-			const frame = buildHomeWaveFrame({
-				timeMs: typeof performance !== "undefined" ? performance.now() : Date.now(),
-				isPlaying: props.isPlaying,
-				positionMs: props.positionMs,
-				durationMs: props.durationMs,
-			}, waveSmoothRef.current);
-			waveSmoothRef.current = frame.smooth;
-			if (!cancelled) setWaveBars(frame.bars);
-			if (!cancelled) timer = setTimeout(tick, 80);
-		};
-		tick();
-		return () => {
-			cancelled = true;
-			if (timer) clearTimeout(timer);
-		};
-	}, [active, props.durationMs, props.isPlaying, props.positionMs]);
 
 	return (
 		<section id="empty-home" aria-label="Mineradio home">
 			<div className="empty-home-shell">
 				<div className="home-hero">
-					<div className="home-hero-inner">
-						<div className="home-kicker" id="home-weather-kicker">Mineradio · Your Library</div>
-						<div className="home-title" id="home-weather-title">我的音乐库</div>
-						<div className="home-sub" id="home-subtitle">{heroSubtitle}</div>
-						<div className="home-weather-meta" id="home-weather-meta">
-							{weatherMeta(props.weatherRadio).map((meta) => (
-								<span className="home-weather-pill" key={meta}>{meta}</span>
-							))}
-						</div>
-						<div className="home-quick-row">
-							<button className="home-chip" data-home-chip="search" type="button" onClick={props.onSearchFocus}>
-								搜索音乐
-							</button>
-							<button className="home-chip" data-home-chip="library" type="button" onClick={props.onOpenLibrary}>
-								我的歌单
-							</button>
-							<button className="home-chip" data-home-chip="local" type="button" onClick={props.onUpload}>
-								导入本地
-							</button>
-							<button className="home-chip" data-home-chip="podcast" type="button" onClick={props.onOpenPodcastSearch}>
-								播客电台
-							</button>
-							<button className="home-chip home-console-chip" data-home-chip="console" type="button" onClick={props.onOpenConsole}>
+					<div className="home-hero-inner home-construction-inner">
+						<div className="home-title home-construction-title">🚧此处施工，敬请期待🚧</div>
+						<button className="home-chip home-console-chip" data-home-chip="console" type="button" onClick={props.onOpenConsole}>
 							展开播放器控制台
-							</button>
-						</div>
-						<div className="home-visual generated" aria-hidden="true">
-							<div className="home-sleeve" />
-							<div className="home-disc" />
-							<div className="home-wave-track" id="home-wave-track">
-								{waveBars.map((bar, index) => (
-									<span key={index} style={{ height: `${bar.height}px`, opacity: bar.opacity }} />
-								))}
-							</div>
-						</div>
-						<div className="home-mosaic" id="home-mosaic" aria-hidden="true">
-							{mosaicCovers.map((cover, index) => (
-								<div
-									className={`home-mosaic-cell${cover ? " has-cover" : ""}${!cover && loading ? " home-skeleton" : ""}`}
-									style={coverStyle(cover)}
-									key={`${cover ?? "empty"}-${index}`}
-								/>
-							))}
-						</div>
+						</button>
 					</div>
 				</div>
 
