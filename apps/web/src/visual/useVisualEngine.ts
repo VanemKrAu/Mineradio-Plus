@@ -289,6 +289,7 @@ export function resolveStageLyricLayoutOptions(
 		lyricTiltY: fx.lyricTiltY,
 		preset: fx.preset,
 		skullLyricEdgeGuard: Number(fx.preset) === 6 && !!(orbitState.orbitCenterLocked || orbitState.orbitRecentering),
+		skullMouthLyrics: Number(fx.preset) === 6,
 	};
 }
 

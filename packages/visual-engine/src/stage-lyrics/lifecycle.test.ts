@@ -712,6 +712,174 @@ test("update applies baseline skull edge-guard lockFit without camera lock", asy
 	lifecycle.dispose();
 });
 
+test("update applies baseline skull-mouth scale and lockFit distance", async () => {
+	const scene = makeFakeScene();
+	const camera = makeFakeCamera({ x: 0, y: 0, z: 0 });
+	const lifecycle = createStageLyricsLifecycle({
+		scene: scene as never,
+		threeFactory: makeFakeThree(),
+		gsapProvider: () => makeFakeGsap([]),
+		customEaseProvider: async () => null,
+		lyricLinesSupplier: () => [] as never,
+		currentTimeSupplier: () => 0,
+		isPlayingSupplier: () => true,
+		audioDurationSupplier: () => 9999,
+		dotTexture: makeFakeDotTexture(),
+		particleLyricsFlagSupplier: () => true,
+		lyricGlowStrengthSupplier: () => 0,
+		lyricGlowBeatFlagSupplier: () => false,
+		lyricSunEnergyHolder: { get: () => 0, set: () => {} },
+		lyricLayoutOptionsSupplier: () => ({
+			lyricCameraLock: false,
+			lyricScale: 1.25,
+			lyricOffsetX: 0.2,
+			lyricOffsetY: 0.1,
+			lyricOffsetZ: 0.4,
+			lyricTiltX: 0,
+			lyricTiltY: 0,
+			preset: 6,
+			skullMouthLyrics: true,
+		} as never),
+		cameraSupplier: () => camera as never,
+		rand: () => 0.35,
+	});
+	await lifecycle.mount(scene as never);
+	lifecycle.update(makeCtx(0, 0.1));
+	const group = lifecycle.group as unknown as {
+		position: { x: number; y: number; z: number };
+		scale: { x: number; y: number; z: number };
+	};
+	const layoutScale = 1.25 * 0.66;
+	const distance = Math.max(2.2, 4.4 + 0.4);
+	const visibleH = 2 * Math.tan((45 * Math.PI / 180) * 0.5) * distance;
+	const visibleW = visibleH * (16 / 9);
+	const safeW = Math.max(visibleW * 0.42, visibleW * 0.84 - 0.2 * 1.22);
+	const safeH = Math.max(visibleH * 0.18, visibleH * 0.44 - 0.1 * 0.82);
+	const viewportFit = Math.min(1, safeW / (5.4 * layoutScale), safeH / (0.78 * layoutScale));
+	const lockFit = Math.min(Math.max(0.42, Math.min(1, viewportFit, 0.80 / layoutScale)), 1.12);
+	const firstFrameLockFitScale = 1 + (lockFit - 1) * (lockFit < 1 ? 0.18 : 0.10);
+	expect(group.scale.x).toBeCloseTo(layoutScale * firstFrameLockFitScale, 6);
+	expect(group.position.x).toBeCloseTo(0.2, 6);
+	expect(group.position.y).toBeCloseTo(0.2 + 0.1, 6);
+	expect(group.position.z).toBeCloseTo(1.46 + 0.4, 6);
+	lifecycle.dispose();
+});
+
+test("update applies baseline skull-mouth shelf avoid offsets", async () => {
+	const scene = makeFakeScene();
+	const camera = makeFakeCamera({ x: 0, y: 0, z: 0 });
+	const lifecycle = createStageLyricsLifecycle({
+		scene: scene as never,
+		threeFactory: makeFakeThree(),
+		gsapProvider: () => makeFakeGsap([]),
+		customEaseProvider: async () => null,
+		lyricLinesSupplier: () => [] as never,
+		currentTimeSupplier: () => 0,
+		isPlayingSupplier: () => true,
+		audioDurationSupplier: () => 9999,
+		dotTexture: makeFakeDotTexture(),
+		particleLyricsFlagSupplier: () => true,
+		lyricGlowStrengthSupplier: () => 0,
+		lyricGlowBeatFlagSupplier: () => false,
+		lyricSunEnergyHolder: { get: () => 0, set: () => {} },
+		lyricLayoutOptionsSupplier: () => ({
+			lyricCameraLock: false,
+			lyricScale: 1.2,
+			lyricOffsetX: 0.1,
+			lyricOffsetY: -0.05,
+			lyricOffsetZ: 0.2,
+			lyricTiltX: 0,
+			lyricTiltY: 0,
+			preset: 6,
+			skullMouthLyrics: true,
+		} as never),
+		getShelfMode: () => "side",
+		getShelfHasOpenContent: () => false,
+		getShelfVisibility: () => 0.4,
+		cameraSupplier: () => camera as never,
+		rand: () => 0.35,
+	});
+	await lifecycle.mount(scene as never);
+	lifecycle.update(makeCtx(0, 0.1));
+	const group = lifecycle.group as unknown as {
+		position: { x: number; y: number; z: number };
+		scale: { x: number; y: number; z: number };
+	};
+	const layoutScale = 1.2 * 0.58;
+	const layoutX = 0.1 - 0.36;
+	const layoutY = -0.05 + 0.02;
+	const layoutZ = 0.2 + 0.18;
+	const distance = Math.max(2.2, 4.4 + layoutZ);
+	const visibleH = 2 * Math.tan((45 * Math.PI / 180) * 0.5) * distance;
+	const visibleW = visibleH * (16 / 9);
+	const safeW = Math.max(visibleW * 0.42, visibleW * 0.84 - Math.abs(layoutX) * 1.22);
+	const safeH = Math.max(visibleH * 0.18, visibleH * 0.44 - Math.abs(layoutY) * 0.82);
+	const viewportFit = Math.min(1, safeW / (5.4 * layoutScale), safeH / (0.78 * layoutScale));
+	const lockFit = Math.min(Math.max(0.42, Math.min(1, viewportFit, 0.80 / layoutScale)), 1.12);
+	const firstFrameLockFitScale = 1 + (lockFit - 1) * (lockFit < 1 ? 0.18 : 0.10);
+	expect(group.scale.x).toBeCloseTo(layoutScale * firstFrameLockFitScale, 6);
+	expect(group.position.x).toBeCloseTo(layoutX, 6);
+	expect(group.position.y).toBeCloseTo(0.2 + layoutY, 6);
+	expect(group.position.z).toBeCloseTo(1.46 + layoutZ, 6);
+	lifecycle.dispose();
+});
+
+test("update applies baseline skull-mouth shelf detail scale without avoid offset", async () => {
+	const scene = makeFakeScene();
+	const camera = makeFakeCamera({ x: 0, y: 0, z: 0 });
+	const lifecycle = createStageLyricsLifecycle({
+		scene: scene as never,
+		threeFactory: makeFakeThree(),
+		gsapProvider: () => makeFakeGsap([]),
+		customEaseProvider: async () => null,
+		lyricLinesSupplier: () => [] as never,
+		currentTimeSupplier: () => 0,
+		isPlayingSupplier: () => true,
+		audioDurationSupplier: () => 9999,
+		dotTexture: makeFakeDotTexture(),
+		particleLyricsFlagSupplier: () => true,
+		lyricGlowStrengthSupplier: () => 0,
+		lyricGlowBeatFlagSupplier: () => false,
+		lyricSunEnergyHolder: { get: () => 0, set: () => {} },
+		lyricLayoutOptionsSupplier: () => ({
+			lyricCameraLock: false,
+			lyricScale: 1.2,
+			lyricOffsetX: 0.1,
+			lyricOffsetY: -0.05,
+			lyricOffsetZ: 0.2,
+			lyricTiltX: 0,
+			lyricTiltY: 0,
+			preset: 6,
+			skullMouthLyrics: true,
+		} as never),
+		getShelfMode: () => "side",
+		getShelfHasOpenContent: () => true,
+		getSkullShelfOpen: () => true,
+		cameraSupplier: () => camera as never,
+		rand: () => 0.35,
+	});
+	await lifecycle.mount(scene as never);
+	lifecycle.update(makeCtx(0, 0.1));
+	const group = lifecycle.group as unknown as {
+		position: { x: number; y: number; z: number };
+		scale: { x: number; y: number; z: number };
+	};
+	const layoutScale = 1.2 * 0.52;
+	const distance = Math.max(2.2, 4.4 + 0.2);
+	const visibleH = 2 * Math.tan((45 * Math.PI / 180) * 0.5) * distance;
+	const visibleW = visibleH * (16 / 9);
+	const safeW = Math.max(visibleW * 0.42, visibleW * 0.84 - 0.1 * 1.22);
+	const safeH = Math.max(visibleH * 0.18, visibleH * 0.44 - 0.05 * 0.82);
+	const viewportFit = Math.min(1, safeW / (5.4 * layoutScale), safeH / (0.78 * layoutScale));
+	const lockFit = Math.min(Math.max(0.42, Math.min(1, viewportFit, 0.80 / layoutScale)), 1.12);
+	const firstFrameLockFitScale = 1 + (lockFit - 1) * (lockFit < 1 ? 0.18 : 0.10);
+	expect(group.scale.x).toBeCloseTo(layoutScale * firstFrameLockFitScale, 6);
+	expect(group.position.x).toBeCloseTo(0.1, 6);
+	expect(group.position.y).toBeCloseTo(0.2 - 0.05, 6);
+	expect(group.position.z).toBeCloseTo(1.46 + 0.2, 6);
+	lifecycle.dispose();
+});
+
 test("update applies baseline wallpaper camera-lock layout and distance when shelf dims wallpaper", async () => {
 	const scene = makeFakeScene();
 	const camera = makeFakeCamera({ x: 0, y: 0, z: 0 });

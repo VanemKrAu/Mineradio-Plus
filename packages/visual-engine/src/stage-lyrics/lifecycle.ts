@@ -100,6 +100,7 @@ export interface LyricLayoutOptions {
 	lyricTiltY?: number;
 	preset?: number;
 	skullLyricEdgeGuard?: boolean;
+	skullMouthLyrics?: boolean;
 }
 function clamp(v: number, lo: number, hi: number): number {
 	if (!isFinite(v)) return lo;
@@ -310,6 +311,7 @@ export function createStageLyricsLifecycle(opts: StageLyricsLifecycleOpts): Stag
 		wallpaperLyricLock: boolean;
 		wallpaperShelfLyrics: boolean;
 		skullLyricEdgeGuard: boolean;
+		skullMouthLyrics: boolean;
 	} {
 		const raw = opts.lyricLayoutOptionsSupplier?.() ?? {};
 		const layout = {
@@ -325,6 +327,7 @@ export function createStageLyricsLifecycle(opts: StageLyricsLifecycleOpts): Stag
 			wallpaperLyricLock: false,
 			wallpaperShelfLyrics: false,
 			skullLyricEdgeGuard: !!raw.skullLyricEdgeGuard,
+			skullMouthLyrics: !!raw.skullMouthLyrics,
 		};
 		const wallpaperLyricLock = layout.preset === 5 && layout.lyricCameraLock;
 		if (wallpaperLyricLock) {
@@ -336,6 +339,15 @@ export function createStageLyricsLifecycle(opts: StageLyricsLifecycleOpts): Stag
 			layout.lyricOffsetY = clamp(layout.lyricOffsetY + (dimForShelf ? -0.04 : 0.08), -1.2, 1.35);
 			layout.lyricOffsetZ = clamp(layout.lyricOffsetZ + (dimForShelf ? 1.02 : 1.15), -1.6, 1.6);
 			layout.lockBaseDistance = dimForShelf ? 5.58 : 4.85;
+		} else if (layout.skullMouthLyrics) {
+			const shelfAvoid = shouldAvoidStageLyricsForShelf();
+			const skullShelfDetailOpen = getShelfHasOpenContent() && getSkullShelfOpen();
+			layout.lyricScale *= skullShelfDetailOpen ? 0.52 : (shelfAvoid ? 0.58 : 0.66);
+			if (shelfAvoid && !skullShelfDetailOpen) {
+				layout.lyricOffsetX = clamp(layout.lyricOffsetX - 0.36, -2, 2);
+				layout.lyricOffsetY = clamp(layout.lyricOffsetY + 0.02, -1.2, 1.35);
+				layout.lyricOffsetZ = clamp(layout.lyricOffsetZ + 0.18, -1.6, 1.6);
+			}
 		} else if (
 			layout.lyricCameraLock &&
 			shouldAvoidStageLyricsForShelf() &&
@@ -477,12 +489,15 @@ export function createStageLyricsLifecycle(opts: StageLyricsLifecycleOpts): Stag
 			}
 			return;
 		}
-		if (layout.skullLyricEdgeGuard) {
-			const lockDistance = layout.lockBaseDistance + layout.lyricOffsetZ;
+		if (layout.skullLyricEdgeGuard || layout.skullMouthLyrics) {
+			const lockDistance = layout.skullMouthLyrics
+				? Math.max(2.2, 4.4 + layout.lyricOffsetZ)
+				: layout.lockBaseDistance + layout.lyricOffsetZ;
 			const edgeGuardCamera = opts.cameraSupplier?.() ?? null;
-			const lockFit = edgeGuardCamera
+			let lockFit = edgeGuardCamera
 				? lyricCameraLockFit(edgeGuardCamera, layout.lyricScale, layout.lyricOffsetX, layout.lyricOffsetY, lockDistance)
 				: 1;
+			if (layout.skullMouthLyrics) lockFit = Math.min(lockFit, 1.12);
 			state.lockFitScale += (lockFit - state.lockFitScale) * (lockFit < state.lockFitScale ? 0.18 : 0.10);
 			state.lockFitScale = finiteOr(state.lockFitScale, 1);
 			setGroupScale(group, layout.lyricScale * state.lockFitScale);

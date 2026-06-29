@@ -75,7 +75,16 @@ test("resolveStageLyricLayoutOptions carries baseline camera lock and layout con
 		lyricTiltY: -11,
 		preset: undefined,
 		skullLyricEdgeGuard: false,
+		skullMouthLyrics: false,
 	});
+});
+
+test("resolveStageLyricLayoutOptions enables skull-mouth lyrics for skull preset", () => {
+	const layout = resolveStageLyricLayoutOptions({
+		preset: 6,
+		lyricCameraLock: false,
+	});
+	expect(layout.skullMouthLyrics).toBe(true);
 });
 
 test("resolveStageLyricLayoutOptions enables skull edge guard while skull orbit is centered", () => {
