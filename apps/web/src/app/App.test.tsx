@@ -1290,6 +1290,54 @@ test("App plays centered shelf playlist hotspots by loading the playlist into th
 	}
 });
 
+test("App routes the logged-out Home library card to the product guide instead of login", async () => {
+	await import("../../../../packages/visual-engine/src/runtime/happy-dom-preload");
+	(globalThis as unknown as { localStorage: Storage }).localStorage = window.localStorage;
+	localStorage.clear();
+	usePlaybackStore.getState().clearQueue();
+	useLyricsStore.getState().reset();
+
+	const fakeClient = {
+		async discoverHome() {
+			return { loggedIn: false, user: null, dailySongs: [], playlists: [], podcasts: [], mode: "starter", updatedAt: 1 };
+		},
+		async weatherRadio() {
+			return {
+				ok: true,
+				weather: null,
+				radio: { title: "天气电台", subtitle: "", seedQueries: [], updatedAt: 1, songs: [] },
+			};
+		},
+	} as unknown as SidecarClient;
+	const rootConfig: RuntimeConfig = {
+		sidecarBaseUrl: "http://127.0.0.1:39999",
+		appDataDir: "",
+		appVersion: "0.0.0-test",
+		schemaVersion: "0.1.0",
+		updaterPublicKeyConfigured: false,
+	};
+	const host = document.createElement("div");
+	document.body.appendChild(host);
+	const root = createRoot(host);
+
+	try {
+		flushSync(() => root.render(<App SplashComponent={() => null} VisualComponent={() => <div id="visual-host" />} createSidecarClient={() => fakeClient} initialRuntimeConfig={rootConfig} />));
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		(host.querySelector('[data-home-card="library"]') as HTMLButtonElement).click();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(host.querySelector("#login-modal")).toBeNull();
+		expect(host.querySelector("#bottom-bar")?.classList.contains("visible")).toBe(true);
+		expect(host.querySelector("#toast.show")?.textContent).toContain("视觉引导");
+	} finally {
+		root.unmount();
+		host.remove();
+		usePlaybackStore.getState().clearQueue();
+		useLyricsStore.getState().reset();
+		localStorage.clear();
+	}
+});
+
 test("App opens the baseline collect picker for shelf detail collect and adds only after a playlist is chosen", async () => {
 	await import("../../../../packages/visual-engine/src/runtime/happy-dom-preload");
 	(globalThis as unknown as { localStorage: Storage }).localStorage = window.localStorage;

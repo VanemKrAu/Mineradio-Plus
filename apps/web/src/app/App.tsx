@@ -1190,6 +1190,11 @@ export function App({
     sidecarClient,
   ]);
 
+  const openHomeProductGuide = useCallback(() => {
+    revealConsole();
+    showToast("视觉引导已打开播放器控制台，播放后会进入粒子与歌词舞台");
+  }, [revealConsole, showToast]);
+
   const openHomeLibrary = useCallback(() => {
     if (homeDiscover?.loggedIn || neteaseStatus?.loggedIn || qqStatus?.loggedIn) {
       if (sidecarClient) void refreshShelfPlaylists(sidecarClient);
@@ -1198,12 +1203,11 @@ export function App({
       showToast("已打开歌单库");
       return;
     }
-    openLoginModal();
-    showToast("登录后同步歌单库");
+    openHomeProductGuide();
   }, [
     homeDiscover?.loggedIn,
     neteaseStatus?.loggedIn,
-    openLoginModal,
+    openHomeProductGuide,
     qqStatus?.loggedIn,
     refreshShelfPlaylists,
     setShelfMode,
@@ -2577,10 +2581,7 @@ export function App({
         onOpenConsole={revealConsole}
         onSearchQuery={searchQuery}
         onUpload={openLocalFileImport}
-        onGuide={() => {
-          revealConsole();
-          showToast("视觉引导已打开播放器控制台，播放后会进入粒子与歌词舞台");
-        }}
+        onGuide={openHomeProductGuide}
         onOpenLogin={openLoginModal}
         onPlayDaily={playHomeDaily}
         onPlayPrivate={() => void playHomePrivate()}
