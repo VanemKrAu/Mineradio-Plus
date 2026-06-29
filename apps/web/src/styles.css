@@ -54,7 +54,7 @@ body.desktop-shell #desktop-window-shell {
   overflow: hidden;
   border-radius: 18px;
   clip-path: inset(0 round 18px);
-  background: #000;
+  background: transparent;
   box-shadow: 0 24px 80px rgba(0, 0, 0, .46);
   transform: translateZ(0);
 }
@@ -3087,7 +3087,7 @@ html.control-glass-svg-ok .search-history-chip {
   width: 100vw;
   height: 100vh;
   pointer-events: none;
-  background: transparent;
+  background: #000;
 }
 
 #visual-host canvas {

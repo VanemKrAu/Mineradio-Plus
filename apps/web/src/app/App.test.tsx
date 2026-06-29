@@ -114,11 +114,10 @@ test("App keeps hidden wallpaper capability placeholder copy out of the product 
 	expect(html).not.toContain('id="t-wallpaperMode"');
 });
 
-test("desktop shell CSS keeps only the outer corner transparent while the app interior stays opaque", async () => {
+test("desktop shell CSS keeps the rounded shell transparent while the visual host backs the app in black", async () => {
 	const css = await fetch(new URL("../styles.css", import.meta.url)).then((response) => response.text());
-	expect(css).toContain("border-radius: 18px;");
-	expect(css).toContain("clip-path: inset(0 round 18px);");
-	expect(css).toContain("background: #000;");
+	expect(/body\.desktop-shell #desktop-window-shell\s*{[\s\S]*border-radius: 18px;[\s\S]*clip-path: inset\(0 round 18px\);[\s\S]*background: transparent;/.test(css)).toBe(true);
+	expect(/#visual-host\s*{[\s\S]*background: #000;/.test(css)).toBe(true);
 	expect(css).not.toContain("clip-path: inset(0 round 34px);");
 });
 
@@ -204,6 +203,49 @@ test("Home blank dismiss accepts only empty Home surfaces", async () => {
 	expect(isHomeBlankDismissElement(document.getElementById("mini-queue-popover"))).toBe(false);
 	expect(isHomeBlankDismissElement(document.getElementById("visual-guide"))).toBe(false);
 	expect(isHomeBlankDismissElement(document.getElementById("toast"))).toBe(false);
+});
+
+test("Home console chip follows baseline openHomePlayerConsole unlock and reveal path", async () => {
+	await import("../../../../packages/visual-engine/src/runtime/happy-dom-preload");
+	document.body.className = "";
+	usePlaybackStore.getState().clearQueue();
+
+	let dismissSplash: (() => void) | null = null;
+	function MockSplash(props: SplashHostProps) {
+		dismissSplash = () => props.onDismissed?.();
+		return <div className="visual-splash-root" />;
+	}
+
+	const host = document.createElement("div");
+	document.body.appendChild(host);
+	const root = createRoot(host);
+
+	try {
+		flushSync(() => root.render(<App SplashComponent={MockSplash} VisualComponent={() => <div id="visual-host" />} />));
+		flushSync(() => dismissSplash?.());
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		const homeButton = document.querySelector("#home-btn") as HTMLButtonElement;
+		homeButton.click();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		homeButton.click();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(document.body.classList.contains("home-controls-locked")).toBe(true);
+
+		(host.querySelector(".home-console-chip") as HTMLButtonElement).click();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		const bar = host.querySelector("#bottom-bar") as HTMLDivElement;
+		expect(document.body.classList.contains("home-controls-locked")).toBe(false);
+		expect(document.body.classList.contains("controls-visible")).toBe(true);
+		expect(bar.classList.contains("visible")).toBe(true);
+		expect(bar.classList.contains("soft-hidden")).toBe(false);
+		expect(host.querySelector("#toast")?.textContent).toContain("播放器控制台已展开");
+	} finally {
+		root.unmount();
+		host.remove();
+		document.body.className = "";
+	}
 });
 
 test("shouldShowEmptyHome follows baseline force/suppress/playback gates", () => {

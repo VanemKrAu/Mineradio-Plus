@@ -732,6 +732,24 @@ export function isDesktopWindowFullscreen(state: WindowState): boolean {
   );
 }
 
+function forceBottomControlsVisible(awakeDurationMs = 900): void {
+  if (typeof document === "undefined") return;
+  document.body.classList.remove("home-controls-locked");
+  document.body.classList.add("controls-visible", "controls-handle-awake");
+  const bar = document.getElementById("bottom-bar");
+  if (bar) {
+    bar.classList.add("visible");
+    bar.classList.remove("soft-hidden");
+    bar.style.pointerEvents = "";
+  }
+  document.getElementById("bottom-handle")?.classList.add("active");
+  if (typeof window !== "undefined") {
+    window.setTimeout(() => {
+      document.body.classList.remove("controls-handle-awake");
+    }, awakeDurationMs);
+  }
+}
+
 export function applyDesktopWindowShellState(state: WindowState): void {
   if (typeof document === "undefined") return;
   document.documentElement.classList.add("desktop-shell-root");
@@ -1080,6 +1098,15 @@ export function App({
     setHomeSuppressed(false);
     setConsole(true);
   }, [setConsole]);
+
+  const openHomePlayerConsole = useCallback(() => {
+    setHomeForcedOpen(false);
+    setHomeSuppressed(false);
+    setConsole(true);
+    setMiniQueue(false);
+    forceBottomControlsVisible(2800);
+    showToast("播放器控制台已展开");
+  }, [setConsole, setMiniQueue, showToast]);
 
   const toggleDiyMode = useCallback(() => {
     if (typeof document === "undefined") return;
@@ -3292,7 +3319,7 @@ export function App({
         durationMs={durationMs}
         onSearchFocus={focusSearch}
         onOpenLibrary={openHomeLibrary}
-        onOpenConsole={revealConsole}
+        onOpenConsole={openHomePlayerConsole}
         onSearchQuery={searchQuery}
         onUpload={openLocalFileImport}
         onGuide={openHomeProductGuide}
@@ -3407,6 +3434,9 @@ export function App({
         onShelfPresenceChange={updateShelfPresence}
         onShelfShowPodcastsChange={updateShelfShowPodcasts}
         onShelfMergeCollectionsChange={updateShelfMergeCollections}
+        deps={{
+          isHomeControlsLocked: () => homeControlsLocked,
+        }}
         onPlayQueueIndex={playMiniQueueIndex}
         onRemoveQueueIndex={removeQueueAt}
         onInsertQueueNext={insertMiniQueueNext}
