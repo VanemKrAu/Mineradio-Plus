@@ -137,13 +137,90 @@ function clampNumber(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function buildDesktopLyricsPayloadPatch(
+export interface DesktopLyricsPayloadContext {
+  title?: string;
+  artist?: string;
+  playing?: boolean;
+  progressSpan?: number;
+  positionMs?: number;
+  durationMs?: number | null;
+  playbackRate?: number;
+  highBloom?: number;
+  beatGlow?: number;
+  beatPulse?: number;
+  bass?: number;
+  hasNativeKaraoke?: boolean;
+  beatMapKey?: string;
+}
+
+const DESKTOP_LYRIC_FONT_STACKS: Record<string, string> = {
+  sans: 'Inter,"Noto Sans SC","PingFang SC","Microsoft YaHei",Arial,sans-serif',
+  hei: '"Noto Sans SC","Microsoft YaHei",SimHei,"PingFang SC",sans-serif',
+  song: '"Noto Serif SC","Source Han Serif SC",SimSun,"Songti SC",serif',
+  "bold-song":
+    '"Source Han Serif SC Heavy","Source Han Serif SC","Noto Serif SC Black","Noto Serif SC","STZhongsong","SimSun",serif',
+  "stone-song":
+    '"FZYaSongS-B-GB","FZCuSong-B09S","Source Han Serif SC Heavy","Noto Serif SC Black","STZhongsong","SimSun",serif',
+  "kai-song":
+    '"Kaiti SC","STKaiti","KaiTi","Source Han Serif SC","Noto Serif SC",serif',
+  "serif-en": 'Georgia,"Times New Roman","Noto Serif SC","Source Han Serif SC",serif',
+  gothic:
+    '"UnifrakturCook","UnifrakturMaguntia","Old English Text MT","Blackletter","Cinzel Decorative","Noto Serif SC",serif',
+  editorial:
+    '"Didot","Bodoni 72","Libre Baskerville",Georgia,"Noto Serif SC",serif',
+  humanist:
+    '"Avenir Next","Segoe UI","Inter","Noto Sans SC","PingFang SC",sans-serif',
+  round:
+    '"HarmonyOS Sans SC","Microsoft YaHei UI","PingFang SC","Noto Sans SC",sans-serif',
+  mono: '"JetBrains Mono",Consolas,"Noto Sans SC","Microsoft YaHei",monospace',
+  display: '"Alibaba PuHuiTi","Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif',
+};
+
+function normalizeDesktopLyricFontKey(key: unknown): string {
+  const value = String(key || "sans").trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(DESKTOP_LYRIC_FONT_STACKS, value)
+    ? value
+    : "sans";
+}
+
+function desktopLyricFontStackForKey(key: unknown): string {
+  return DESKTOP_LYRIC_FONT_STACKS[normalizeDesktopLyricFontKey(key)];
+}
+
+function desktopLyricFontWeightValue(fx: FxState): number {
+  if (normalizeDesktopLyricFontKey(fx.lyricFont) === "stone-song") return 900;
+  return Math.round(
+    clampNumber(Number(fx.lyricWeight) || 900, 500, 900) / 50,
+  ) * 50;
+}
+
+function desktopOverlayColorValue(value: unknown, fallback: string): string {
+  const raw = String(value || "").trim();
+  if (/^#[0-9a-f]{3}$/i.test(raw) || /^#[0-9a-f]{6}$/i.test(raw)) {
+    return raw;
+  }
+  if (/^rgba?\(/i.test(raw) || /^hsla?\(/i.test(raw)) return raw;
+  return fallback;
+}
+
+function trackTitle(track: Track | null | undefined): string {
+  return track?.title || "Mineradio";
+}
+
+function trackArtist(track: Track | null | undefined): string {
+  return track?.artists?.join(" / ") || track?.album || "";
+}
+
+export function buildDesktopLyricsPayloadPatch(
   fx: FxState,
   text: string,
   progress: number,
+  context: DesktopLyricsPayloadContext = {},
 ) {
   const size = clampNumber(fx.desktopLyricsSize, 0.72, 1.55);
   const yRatio = clampNumber(fx.desktopLyricsY, 0.08, 0.92);
+  const durationSeconds = Math.max(0, Number(context.durationMs ?? 0) / 1000);
+  const timeSeconds = Math.max(0, Number(context.positionMs ?? 0) / 1000);
   const fps =
     fx.desktopLyricsFps === 24 ||
     fx.desktopLyricsFps === 30 ||
@@ -155,15 +232,36 @@ function buildDesktopLyricsPayloadPatch(
     enabled: true,
     text,
     progress: clampNumber(progress, 0, 1),
+    progressSpan: clampNumber(Number(context.progressSpan ?? 4.8), 0, 60),
+    title: context.title || "Mineradio",
+    artist: context.artist || "",
+    playing: context.playing === true,
     size,
     y: yRatio,
-    frameRate: fx.desktopLyricsFps,
+    frameRate: fps,
     opacity: clampNumber(fx.desktopLyricsOpacity, 0.28, 1),
     position: { x: 80, y: Math.round(yRatio * 1000) },
     clickThrough: fx.desktopLyricsClickThrough,
+    lyricGlowParticles: fx.lyricGlowParticles,
+    cinema: fx.desktopLyricsCinema !== false,
+    highlightFollow: fx.desktopLyricsHighlight === true,
+    fontFamily: desktopLyricFontStackForKey(fx.lyricFont),
+    fontWeight: desktopLyricFontWeightValue(fx),
+    letterSpacing: clampNumber(Number(fx.lyricLetterSpacing) || 0, -0.04, 0.18),
+    lineHeight: clampNumber(Number(fx.lyricLineHeight) || 1, 0.86, 1.35),
+    lyricScale: clampNumber(Number(fx.lyricScale) || 1, 0.35, 1.65),
+    feather: context.hasNativeKaraoke ? 0.03 : 0.055,
+    beatMapKey: context.beatMapKey || "",
+    colors: {
+      primary: desktopOverlayColorValue(fx.lyricColor, "#d6f8ff"),
+      secondary: desktopOverlayColorValue(fx.visualTintColor, "#9cffdf"),
+      background: "rgba(0, 0, 0, 0.22)",
+      highlight: desktopOverlayColorValue(fx.lyricHighlightColor, "#fff0b8"),
+      glow: desktopOverlayColorValue(fx.lyricGlowColor, "#9cffdf"),
+    },
     font: {
-      family: "Microsoft YaHei UI, Segoe UI, sans-serif",
-      weight: 700,
+      family: desktopLyricFontStackForKey(fx.lyricFont),
+      weight: desktopLyricFontWeightValue(fx),
       fit: {
         minPx: Math.round(18 * size),
         maxPx: Math.round(64 * size),
@@ -175,6 +273,20 @@ function buildDesktopLyricsPayloadPatch(
       fps,
       reduceMotion: false,
       smoothingMs: 120,
+      lyricGlow: fx.lyricGlow,
+      lyricGlowBeat: fx.lyricGlowBeat,
+      lyricGlowStrength: fx.lyricGlow
+        ? clampNumber(Number(fx.lyricGlowStrength) || 0, 0, 0.85)
+        : 0,
+      highBloom: clampNumber(Number(context.highBloom ?? 0), 0, 1.45),
+      beatGlow: clampNumber(Number(context.beatGlow ?? 0), 0, 1.7),
+      beatPulse: clampNumber(Number(context.beatPulse ?? 0), 0, 1.4),
+      bass: clampNumber(Number(context.bass ?? 0), 0, 1.2),
+    },
+    playback: {
+      time: timeSeconds,
+      duration: durationSeconds,
+      rate: clampNumber(Number(context.playbackRate ?? 1), 0.25, 4),
     },
   };
 }
@@ -1156,6 +1268,14 @@ export function App({
       useVisualStore.getState().fx,
       text,
       duration > 0 ? playback.positionMs / duration : 0,
+      {
+        title: trackTitle(playback.currentTrack),
+        artist: trackArtist(playback.currentTrack),
+        playing: playback.isPlaying,
+        positionMs: playback.positionMs,
+        durationMs: duration,
+        playbackRate: audioRef.current?.playbackRate,
+      },
     );
     if (
       shouldPushDesktopLyricsPayload(
@@ -1317,6 +1437,14 @@ export function App({
       visualFx,
       currentDesktopLyricText(),
       (durationMs ?? 0) > 0 ? positionMs / (durationMs ?? 1) : 0,
+      {
+        title: trackTitle(currentTrack),
+        artist: trackArtist(currentTrack),
+        playing: isPlaying,
+        positionMs,
+        durationMs,
+        playbackRate: audioRef.current?.playbackRate,
+      },
     );
     if (
       !shouldPushDesktopLyricsPayload(
@@ -1333,6 +1461,8 @@ export function App({
     currentDesktopLyricText,
     desktopLyricsEnabled,
     durationMs,
+    currentTrack,
+    isPlaying,
     lyricsPayload,
     positionMs,
     visualFx,

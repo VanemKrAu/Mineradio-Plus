@@ -47,6 +47,7 @@ test("computeDesktopLyricsStyle exposes progress and placement CSS hooks", () =>
         primary: "#fff",
         secondary: "#fd0",
         background: "rgba(0,0,0,.3)",
+        highlight: "#fff0b8",
         glow: "#fd0",
       },
     }),
@@ -56,6 +57,50 @@ test("computeDesktopLyricsStyle exposes progress and placement CSS hooks", () =>
   expect(style.top).toBe("calc(76vh)");
   expect(style["--desktop-lyrics-size"]).toBe("1.2");
   expect(style["--desktop-lyrics-primary"]).toBe("#fff");
+});
+
+test("computeDesktopLyricsStyle exposes baseline top-level typography and motion hooks", () => {
+  const style = computeDesktopLyricsStyle(
+    normalizeDesktopLyricsPayload({
+      enabled: true,
+      text: "line",
+      fontFamily: '"Noto Sans SC","Microsoft YaHei",sans-serif',
+      fontWeight: 850,
+      letterSpacing: 0.08,
+      lineHeight: 1.24,
+      lyricScale: 1.36,
+      feather: 0.03,
+      colors: {
+        primary: "#fff",
+        secondary: "#9fe7ff",
+        background: "rgba(0,0,0,.22)",
+        highlight: "#fff0b8",
+        glow: "#9fe7ff",
+      },
+      motion: {
+        fps: 60,
+        reduceMotion: false,
+        smoothingMs: 120,
+        lyricGlow: true,
+        lyricGlowBeat: true,
+        lyricGlowStrength: 0.5,
+        highBloom: 0.7,
+        beatGlow: 0.8,
+        beatPulse: 0.9,
+        bass: 0.4,
+      },
+    }),
+  );
+
+  expect(style["--desktop-lyrics-font-family"]).toContain("Noto Sans SC");
+  expect(style["--desktop-lyrics-font-weight"]).toBe("850");
+  expect(style["--desktop-lyrics-letter-spacing"]).toBe("0.08em");
+  expect(style["--desktop-lyrics-line-height"]).toBe("1.24");
+  expect(style["--desktop-lyrics-lyric-scale"]).toBe("1.36");
+  expect(style["--desktop-lyrics-feather"]).toBe("0.03");
+  expect(style["--desktop-lyrics-highlight"]).toBe("#fff0b8");
+  expect(style["--desktop-lyrics-glow-strength"]).toBe("0.5");
+  expect(style["--desktop-lyrics-beat-glow"]).toBe("0.8");
 });
 
 test("DesktopLyricsOverlay renders locked class and text from payload", () => {

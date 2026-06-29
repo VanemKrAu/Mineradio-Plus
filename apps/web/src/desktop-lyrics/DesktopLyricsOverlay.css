@@ -34,9 +34,15 @@
     calc(var(--desktop-lyrics-max-font) * var(--desktop-lyrics-size))
   );
   font-weight: var(--desktop-lyrics-font-weight);
-  line-height: 1.18;
+  line-height: var(--desktop-lyrics-line-height);
+  letter-spacing: var(--desktop-lyrics-letter-spacing);
+  transform: scale(var(--desktop-lyrics-lyric-scale));
+  transform-origin: left center;
   text-shadow:
-    0 0 10px var(--desktop-lyrics-glow),
+    0 0 calc(10px + 14px * var(--desktop-lyrics-glow-strength))
+      var(--desktop-lyrics-glow),
+    0 0 calc(6px * var(--desktop-lyrics-beat-glow))
+      var(--desktop-lyrics-highlight),
     0 1px 2px rgb(0 0 0 / 0.42);
   user-select: none;
   touch-action: none;

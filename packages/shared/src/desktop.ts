@@ -25,6 +25,7 @@ export const DesktopLyricsColorsSchema = z.object({
   primary: z.string().min(1).default("#ffffff"),
   secondary: z.string().min(1).default("#9fe7ff"),
   background: z.string().min(1).default("rgba(0, 0, 0, 0.22)"),
+  highlight: z.string().min(1).default("#fff0b8"),
   glow: z.string().min(1).default("rgba(159, 231, 255, 0.68)"),
 });
 
@@ -65,6 +66,13 @@ export const DesktopLyricsMotionSchema = z.object({
     .default(60),
   reduceMotion: z.boolean().default(false),
   smoothingMs: ClampedNumberSchema(0, 2000, 120),
+  lyricGlow: z.boolean().default(false),
+  lyricGlowBeat: z.boolean().default(false),
+  lyricGlowStrength: ClampedNumberSchema(0, 0.85, 0),
+  highBloom: ClampedNumberSchema(0, 1.45, 0),
+  beatGlow: ClampedNumberSchema(0, 1.7, 0),
+  beatPulse: ClampedNumberSchema(0, 1.4, 0),
+  bass: ClampedNumberSchema(0, 1.2, 0),
 });
 
 export const DesktopLyricsFrameRateSchema = z
@@ -98,10 +106,20 @@ export const DesktopLyricsHotBoundsSchema = z
     };
   });
 
+export const DesktopLyricsPlaybackSchema = z.object({
+  time: ClampedNumberSchema(0, 24 * 60 * 60, 0),
+  duration: ClampedNumberSchema(0, 24 * 60 * 60, 0),
+  rate: ClampedNumberSchema(0.25, 4, 1),
+});
+
 export const DesktopLyricsPayloadSchema = z.object({
   enabled: z.boolean().default(false),
   text: z.string().default(""),
   progress: ClampedNumberSchema(0, 1, 0),
+  progressSpan: ClampedNumberSchema(0, 60, 4.8),
+  title: z.string().default("Mineradio"),
+  artist: z.string().default(""),
+  playing: z.boolean().default(false),
   size: ClampedNumberSchema(0.72, 1.55, 1),
   y: ClampedNumberSchema(0.08, 0.92, 0.76),
   frameRate: DesktopLyricsFrameRateSchema,
@@ -109,8 +127,28 @@ export const DesktopLyricsPayloadSchema = z.object({
   opacity: ClampedNumberSchema(0, 1, 0.92),
   position: DesktopLyricsPositionSchema.prefault({}),
   clickThrough: z.boolean().default(true),
+  lyricGlowParticles: z.boolean().default(false),
+  cinema: z.boolean().default(true),
+  highlightFollow: z.boolean().default(false),
+  fontFamily: z
+    .string()
+    .min(1)
+    .default("Microsoft YaHei UI, Segoe UI, sans-serif"),
+  fontWeight: z
+    .number()
+    .finite()
+    .catch(700)
+    .transform((value) => clamp(value, 100, 900))
+    .default(700),
+  letterSpacing: ClampedNumberSchema(-0.04, 0.18, 0),
+  lineHeight: ClampedNumberSchema(0.86, 1.35, 1),
+  lyricScale: ClampedNumberSchema(0.35, 1.65, 1),
+  feather: ClampedNumberSchema(0, 0.12, 0.055),
+  beatMapKey: z.string().default(""),
+  beatMap: z.unknown().optional(),
   font: DesktopLyricsFontSchema.prefault({}),
   motion: DesktopLyricsMotionSchema.prefault({}),
+  playback: DesktopLyricsPlaybackSchema.prefault({}),
 });
 
 export type DesktopLyricsPayload = z.infer<typeof DesktopLyricsPayloadSchema>;

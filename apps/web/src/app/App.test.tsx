@@ -6,6 +6,7 @@ import { flushSync } from "react-dom";
 import {
 	App,
 	applyDesktopWindowShellState,
+	buildDesktopLyricsPayloadPatch,
 	deriveSidecarRecoveryNoticeState,
 	isHomeBlankDismissElement,
 	shouldUseSecondaryLeftDisplaySeamGuard,
@@ -18,6 +19,7 @@ import { usePlaybackStore } from "../stores/playback-store";
 import { CUSTOM_LYRIC_PREF_STORE_KEY, CUSTOM_LYRIC_STORE_KEY } from "../lyrics/custom-lyrics";
 import type { SidecarClient } from "../api/sidecar-client";
 import type { VisualEngineHostProps } from "../visual/VisualEngineHost";
+import { cloneFxState } from "@mineradio/visual-engine";
 
 test("App keeps the empty-home music page mounted behind the splash gate", () => {
 	const html = renderToStaticMarkup(React.createElement(App));
@@ -197,6 +199,60 @@ test("shouldUseSecondaryLeftDisplaySeamGuard mirrors baseline secondary display 
 		isPrimaryDisplay: false,
 		hasDisplayOnLeft: false,
 	})).toBe(false);
+});
+
+test("buildDesktopLyricsPayloadPatch mirrors baseline metadata typography motion and playback fields", () => {
+	const fx = cloneFxState();
+	fx.lyricFont = "stone-song";
+	fx.lyricWeight = 750;
+	fx.lyricLetterSpacing = 0.12;
+	fx.lyricLineHeight = 1.24;
+	fx.lyricScale = 1.4;
+	fx.lyricGlow = true;
+	fx.lyricGlowBeat = true;
+	fx.lyricGlowStrength = 0.52;
+	fx.lyricGlowParticles = true;
+	fx.desktopLyricsCinema = false;
+	fx.desktopLyricsHighlight = true;
+
+	const payload = buildDesktopLyricsPayloadPatch(fx, "line", 0.42, {
+		title: "Track",
+		artist: "Artist",
+		playing: true,
+		progressSpan: 5.2,
+		positionMs: 42000,
+		durationMs: 210000,
+		playbackRate: 1.25,
+		highBloom: 0.7,
+		beatGlow: 0.8,
+		beatPulse: 0.9,
+		bass: 0.4,
+		hasNativeKaraoke: true,
+	});
+
+	expect(payload.title).toBe("Track");
+	expect(payload.artist).toBe("Artist");
+	expect(payload.playing).toBe(true);
+	expect(payload.progressSpan).toBe(5.2);
+	expect(payload.fontFamily).toContain("Source Han Serif SC Heavy");
+	expect(payload.fontWeight).toBe(900);
+	expect(payload.letterSpacing).toBe(0.12);
+	expect(payload.lineHeight).toBe(1.24);
+	expect(payload.lyricScale).toBe(1.4);
+	expect(payload.feather).toBe(0.03);
+	expect(payload.lyricGlowParticles).toBe(true);
+	expect(payload.cinema).toBe(false);
+	expect(payload.highlightFollow).toBe(true);
+	expect(payload.motion.lyricGlow).toBe(true);
+	expect(payload.motion.lyricGlowBeat).toBe(true);
+	expect(payload.motion.lyricGlowStrength).toBe(0.52);
+	expect(payload.motion.highBloom).toBe(0.7);
+	expect(payload.motion.beatGlow).toBe(0.8);
+	expect(payload.motion.beatPulse).toBe(0.9);
+	expect(payload.motion.bass).toBe(0.4);
+	expect(payload.playback.time).toBe(42);
+	expect(payload.playback.duration).toBe(210);
+	expect(payload.playback.rate).toBe(1.25);
 });
 
 test("App custom lyric modal saves text and applies custom lyrics to current track", async () => {

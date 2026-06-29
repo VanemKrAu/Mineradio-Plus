@@ -100,6 +100,73 @@ test("desktop lyrics payload keeps colors and click-through knobs shared across 
   expect(parsed.font.fit.maxLines).toBe(2);
 });
 
+test("desktop lyrics payload preserves baseline metadata typography motion and playback fields", () => {
+  const parsed = DesktopLyricsPayloadSchema.parse({
+    enabled: true,
+    text: "line",
+    progressSpan: 5.24,
+    title: "Track",
+    artist: "Artist",
+    playing: true,
+    lyricGlowParticles: true,
+    cinema: false,
+    highlightFollow: true,
+    fontFamily: '"Noto Sans SC","Microsoft YaHei",sans-serif',
+    fontWeight: 875,
+    letterSpacing: 0.4,
+    lineHeight: 3,
+    lyricScale: 8,
+    feather: -1,
+    beatMapKey: "mr:42",
+    colors: {
+      primary: "#fff",
+      secondary: "#9fe7ff",
+      highlight: "#fff0b8",
+      glow: "#9fe7ff",
+    },
+    motion: {
+      fps: 60,
+      lyricGlow: true,
+      lyricGlowBeat: true,
+      lyricGlowStrength: 2,
+      highBloom: 9,
+      beatGlow: 9,
+      beatPulse: 9,
+      bass: 9,
+    },
+    playback: {
+      time: -1,
+      duration: 360,
+      rate: 12,
+    },
+  });
+
+  expect(parsed.progressSpan).toBe(5.24);
+  expect(parsed.title).toBe("Track");
+  expect(parsed.artist).toBe("Artist");
+  expect(parsed.playing).toBe(true);
+  expect(parsed.lyricGlowParticles).toBe(true);
+  expect(parsed.cinema).toBe(false);
+  expect(parsed.highlightFollow).toBe(true);
+  expect(parsed.fontFamily).toContain("Noto Sans SC");
+  expect(parsed.fontWeight).toBe(875);
+  expect(parsed.letterSpacing).toBe(0.18);
+  expect(parsed.lineHeight).toBe(1.35);
+  expect(parsed.lyricScale).toBe(1.65);
+  expect(parsed.feather).toBe(0);
+  expect(parsed.beatMapKey).toBe("mr:42");
+  expect(parsed.colors.highlight).toBe("#fff0b8");
+  expect(parsed.motion.lyricGlow).toBe(true);
+  expect(parsed.motion.lyricGlowStrength).toBe(0.85);
+  expect(parsed.motion.highBloom).toBe(1.45);
+  expect(parsed.motion.beatGlow).toBe(1.7);
+  expect(parsed.motion.beatPulse).toBe(1.4);
+  expect(parsed.motion.bass).toBe(1.2);
+  expect(parsed.playback.time).toBe(0);
+  expect(parsed.playback.duration).toBe(360);
+  expect(parsed.playback.rate).toBe(4);
+});
+
 test("desktop lyrics hot bounds clamps relative rectangle and preserves ordering", () => {
   const parsed = DesktopLyricsHotBoundsSchema.parse({
     left: -5000,
