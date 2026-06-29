@@ -17,6 +17,7 @@ import type { SplashHostProps } from "../visual/SplashHost";
 import type { SidecarStatus, RuntimeConfig } from "../tauri/runtime";
 import { useLyricsStore } from "../stores/lyrics-store";
 import { usePlaybackStore } from "../stores/playback-store";
+import { useSearchStore } from "../stores/search-store";
 import { CUSTOM_LYRIC_PREF_STORE_KEY, CUSTOM_LYRIC_STORE_KEY } from "../lyrics/custom-lyrics";
 import { SidecarClientError, type SidecarClient } from "../api/sidecar-client";
 import type { VisualEngineHostProps } from "../visual/VisualEngineHost";
@@ -93,7 +94,8 @@ test("App keeps the empty-home music page mounted behind the splash gate", () =>
 	expect(html).toContain('id="bottom-bar"');
 	expect(html).toContain('id="user-btn"');
 	expect(html).toContain('id="update-shell"');
-	expect(html).toContain("🚧此处施工，敬请期待🚧");
+	expect(html).toContain('id="home-weather-kicker"');
+	expect(html).toContain("我的音乐库");
 	expect(html).toContain("展开播放器控制台");
 	expect(html).toContain("每日推荐");
 });
@@ -914,6 +916,109 @@ test("App starts baseline Home private radar from discover songs", async () => {
 	host.remove();
 	usePlaybackStore.getState().clearQueue();
 	localStorage.clear();
+});
+
+test("App derives baseline Home recent and profile actions from playback history", async () => {
+	await import("../../../../packages/visual-engine/src/runtime/happy-dom-preload");
+	(globalThis as unknown as { localStorage: Storage }).localStorage = window.localStorage;
+	const restoreAudio = installAppStubAudio();
+	localStorage.clear();
+	usePlaybackStore.getState().clearQueue();
+	useSearchStore.getState().setKeyword("");
+
+	const tracks: Track[] = [
+		{
+			provider: "netease",
+			id: "recent-1",
+			sourceId: "recent-1",
+			title: "Earlier Song",
+			artists: ["Alice"],
+			album: "",
+			coverUrl: "",
+			durationMs: 1000,
+			qualityHints: [],
+			playableState: "playable",
+		},
+		{
+			provider: "qq",
+			id: "recent-2",
+			sourceId: "recent-2",
+			title: "Recent Song",
+			artists: ["Alice"],
+			album: "",
+			coverUrl: "",
+			durationMs: 2000,
+			qualityHints: [],
+			playableState: "playable",
+		},
+	];
+	const fakeClient = {
+		async playlistList() {
+			return [];
+		},
+		async discoverHome() {
+			return {
+				loggedIn: false,
+				user: null,
+				mode: "starter",
+				dailySongs: [],
+				playlists: [],
+				podcasts: [],
+				updatedAt: 1,
+			};
+		},
+	} as unknown as SidecarClient;
+	const rootConfig: RuntimeConfig = {
+		sidecarBaseUrl: "http://127.0.0.1:39999",
+		appDataDir: "",
+		appVersion: "0.0.0-test",
+		schemaVersion: "0.1.0",
+		updaterPublicKeyConfigured: false,
+	};
+	const host = document.createElement("div");
+	document.body.appendChild(host);
+	const root = createRoot(host);
+
+	try {
+		flushSync(() => root.render(<App SplashComponent={() => null} VisualComponent={() => <div id="visual-host" />} createSidecarClient={() => fakeClient} initialRuntimeConfig={rootConfig} />));
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		usePlaybackStore.getState().setQueue(tracks);
+		usePlaybackStore.getState().playAt(0);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		const audio = appStubAudioInstances[0];
+		audio.duration = 2;
+		audio.currentTime = 1.2;
+		audio.dispatchEvent(new Event("timeupdate"));
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		usePlaybackStore.getState().playAt(1);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		audio.duration = 4;
+		audio.currentTime = 2.2;
+		audio.dispatchEvent(new Event("timeupdate"));
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		audio.dispatchEvent(new Event("ended"));
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		(host.querySelector("#home-btn") as HTMLButtonElement).click();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(host.querySelector("#home-continue-title")?.textContent).toBe("Recent Song");
+		expect(host.querySelector("#home-profile-title")?.textContent).toBe("Alice");
+		expect(localStorage.getItem("mineradio-listen-stats-v1")).toContain("Recent Song");
+
+		(host.querySelector('[data-home-card="profile"]') as HTMLButtonElement).click();
+		expect(useSearchStore.getState().keyword).toBe("Alice");
+
+		(host.querySelector('[data-home-card="continue"]') as HTMLButtonElement).click();
+		expect(usePlaybackStore.getState().queue.map((track) => track.id)).toEqual(["recent-2"]);
+		expect(usePlaybackStore.getState().currentTrack?.id).toBe("recent-2");
+	} finally {
+		root.unmount();
+		host.remove();
+		usePlaybackStore.getState().clearQueue();
+		useSearchStore.getState().setKeyword("");
+		localStorage.clear();
+		restoreAudio();
+	}
 });
 
 test("App starts baseline Home weather radio from a weather rail song", async () => {

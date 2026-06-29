@@ -1,9 +1,15 @@
-import type { CSSProperties, ReactElement } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from "react";
 import type { DiscoverHomeResponse, PlaylistSummary, PodcastRadio, Track, WeatherRadioResponse } from "@mineradio/shared";
 
 export interface EmptyHomeHostProps {
 	discover?: DiscoverHomeResponse | null;
 	weatherRadio?: WeatherRadioResponse | null;
+	listenSummary?: HomeListenSummary | null;
+	active?: boolean;
+	loading?: boolean;
+	isPlaying?: boolean;
+	positionMs?: number;
+	durationMs?: number | null;
 	onSearchFocus?: () => void;
 	onOpenLibrary?: () => void;
 	onOpenConsole?: () => void;
@@ -22,6 +28,30 @@ export interface EmptyHomeHostProps {
 	onPlayWeatherSong?: (index: number) => void;
 }
 
+export interface HomeListenRecord {
+	track: Track;
+	plays: number;
+}
+
+export interface HomeListenSummary {
+	recent?: HomeListenRecord | null;
+	topSong?: HomeListenRecord | null;
+	topArtist?: { name: string; plays: number; coverUrl?: string } | null;
+	totalPlays?: number;
+}
+
+interface HomeWaveBar {
+	height: number;
+	opacity: number;
+}
+
+interface HomeWaveFrame {
+	bars: HomeWaveBar[];
+	smooth: number[];
+}
+
+const HOME_WAVE_BAR_COUNT = 24;
+
 const STARTER_TILES = [
 	{ kind: "login", tone: "library", title: "登录同步歌单", sub: "网易云 / QQ 音乐", action: "Login" },
 	{ kind: "search", tone: "search", title: "搜索一首歌", sub: "原唱优先", action: "Search", query: "" },
@@ -32,6 +62,8 @@ const STARTER_TILES = [
 
 type HomeTile =
 	| (typeof STARTER_TILES)[number]
+	| { kind: "recent"; tone: string; title: string; sub: string; action: string; record: HomeListenRecord; coverUrl?: string }
+	| { kind: "profile"; tone: string; title: string; sub: string; action: string; query: string; coverUrl?: string }
 	| { kind: "song"; tone: string; title: string; sub: string; action: string; index: number; coverUrl?: string }
 	| { kind: "playlist"; tone: string; title: string; sub: string; action: string; index: number; coverUrl?: string }
 	| { kind: "podcast"; tone: string; title: string; sub: string; action: string; index: number; coverUrl?: string }
@@ -44,6 +76,43 @@ function artistLine(track: Track | null | undefined, fallback = "推荐歌曲"):
 
 function coverStyle(url: string | undefined): CSSProperties | undefined {
 	return url ? { backgroundImage: `url("${url}")` } : undefined;
+}
+
+function clampHomeWave(value: number, min: number, max: number): number {
+	return Math.max(min, Math.min(max, value));
+}
+
+export function buildHomeWaveFrame(input: {
+	timeMs: number;
+	isPlaying?: boolean;
+	positionMs?: number;
+	durationMs?: number | null;
+}, previous: number[] = []): HomeWaveFrame {
+	const smooth = Array.from({ length: HOME_WAVE_BAR_COUNT }, (_, index) => previous[index] || 0);
+	const nowT = Math.max(0, input.timeMs) / 1000;
+	const positionSeconds = Math.max(0, Number(input.positionMs || 0)) / 1000;
+	const progress = input.durationMs && input.durationMs > 0
+		? clampHomeWave(Number(input.positionMs || 0) / input.durationMs, 0, 1)
+		: 0;
+	const playingPulse = input.isPlaying
+		? 0.16 + Math.abs(Math.sin(positionSeconds * 2.15 + progress * Math.PI)) * 0.26
+		: 0;
+	const bars = smooth.map((previousValue, index) => {
+		const ratio = HOME_WAVE_BAR_COUNT > 1 ? index / (HOME_WAVE_BAR_COUNT - 1) : 0;
+		const fallbackBin = 0.16 + Math.sin(nowT * 1.4 + index * 0.34) * 0.06;
+		const beatPulse = input.isPlaying ? Math.abs(Math.sin(positionSeconds * 4.2 + index * 0.08)) * 0.24 : 0;
+		const target = clampHomeWave(Math.max(
+			fallbackBin,
+			playingPulse * 0.35 + fallbackBin * 0.18 + beatPulse * 0.24 + ratio * 0.018,
+		), 0.03, 1);
+		const next = previousValue + (target - previousValue) * (target > previousValue ? 0.34 : 0.12);
+		smooth[index] = next;
+		return {
+			height: Math.max(4, next * 18),
+			opacity: clampHomeWave(0.36 + next * 0.68, 0.32, 1),
+		};
+	});
+	return { bars, smooth };
 }
 
 function cardCoverClass(url: string | undefined): string {
@@ -63,10 +132,35 @@ function podcastSub(podcast: PodcastRadio | null | undefined): string {
 function buildHomeTiles(
 	discover: DiscoverHomeResponse | null | undefined,
 	weatherRadio: WeatherRadioResponse | null | undefined,
+	listenSummary: HomeListenSummary | null | undefined,
 ): HomeTile[] {
 	const weatherSongs = weatherRadio?.radio.songs ?? [];
+	const tiles: HomeTile[] = [];
+	if (listenSummary?.recent?.track && tiles.length < 5) {
+		const recent = listenSummary.recent;
+		tiles.push({
+			kind: "recent",
+			tone: "search",
+			title: recent.track.title || "继续听",
+			sub: artistLine(recent.track, "最近播放"),
+			action: "Play",
+			record: recent,
+			coverUrl: recent.track.coverUrl,
+		});
+	}
+	if (listenSummary?.topArtist?.name && tiles.length < 5) {
+		tiles.push({
+			kind: "profile",
+			tone: "local",
+			title: listenSummary.topArtist.name,
+			sub: `常听歌手 · ${listenSummary.topArtist.plays} 次`,
+			action: "Search",
+			query: listenSummary.topArtist.name,
+			coverUrl: listenSummary.topArtist.coverUrl,
+		});
+	}
 	if (!discover?.loggedIn && weatherSongs.length) {
-		return weatherSongs.slice(0, 5).map((song, index) => ({
+		weatherSongs.slice(0, 5 - tiles.length).forEach((song, index) => tiles.push({
 			kind: "weatherSong",
 			tone: "daily",
 			title: song.title || "天气电台歌曲",
@@ -75,10 +169,11 @@ function buildHomeTiles(
 			index,
 			coverUrl: song.coverUrl,
 		}));
+		return tiles.slice(0, 5);
 	}
-	if (!discover?.loggedIn) return [...STARTER_TILES];
-	const tiles: HomeTile[] = [];
-	discover.dailySongs.slice(0, 4).forEach((song, index) => {
+	if (!discover?.loggedIn) return tiles.length ? [...tiles, ...STARTER_TILES].slice(0, 5) : [...STARTER_TILES];
+	discover.dailySongs.slice(0, Math.max(0, 4 - tiles.length)).forEach((song, index) => {
+		if (tiles.length >= 5) return;
 		tiles.push({
 			kind: "song",
 			tone: index % 2 ? "search" : "daily",
@@ -125,12 +220,48 @@ function buildHomeTiles(
 	return tiles.length ? tiles.slice(0, 5) : [...STARTER_TILES];
 }
 
+function homeTileCover(tile: HomeTile): string | undefined {
+	return "coverUrl" in tile ? tile.coverUrl : undefined;
+}
+
+function homeTileKey(tile: HomeTile, index: number): string {
+	if (tile.kind === "song" || tile.kind === "playlist" || tile.kind === "podcast" || tile.kind === "weatherSong") {
+		return `${tile.kind}:${tile.index}:${tile.title}`;
+	}
+	if (tile.kind === "recent") return `${tile.kind}:${tile.record.track.provider}:${tile.record.track.id}`;
+	if (tile.kind === "profile") return `${tile.kind}:${tile.query}`;
+	return `${tile.kind}:${index}:${tile.title}`;
+}
+
+function buildMosaicCovers(tiles: HomeTile[]): (string | undefined)[] {
+	const covers = tiles.map((tile) => homeTileCover(tile)).filter((cover): cover is string => !!cover);
+	return [0, 1, 2].map((index) => covers[index] || covers[(index + 1) % Math.max(1, covers.length)]);
+}
+
+function weatherMeta(weatherRadio: WeatherRadioResponse | null | undefined): string[] {
+	const weather = weatherRadio?.weather ?? null;
+	const location = weather?.location?.name || "上海";
+	if (!weather) {
+		return [location, weatherRadio && !weatherRadio.ok ? "天气暂不可用" : "正在整理天气"];
+	}
+	const meta = [
+		location,
+		`${weather.label} · ${Math.round(weather.temperature || 0)}°`,
+		`体感 ${Math.round(weather.apparentTemperature || weather.temperature || 0)}°`,
+	];
+	const humidity = Number(weather.humidity);
+	if (Number.isFinite(humidity)) meta.push(`湿度 ${Math.round(humidity)}%`);
+	return meta;
+}
+
 function handleTileAction(props: EmptyHomeHostProps, tile: HomeTile): void {
 	if (tile.kind === "login") props.onOpenLogin?.();
 	else if (tile.kind === "search") props.onSearchQuery?.(tile.query ?? "") ?? props.onSearchFocus?.();
 	else if (tile.kind === "local") props.onUpload?.();
 	else if (tile.kind === "podcastSearch") props.onOpenPodcastSearch?.();
 	else if (tile.kind === "guide") props.onGuide?.();
+	else if (tile.kind === "recent") props.onPlayRecent?.();
+	else if (tile.kind === "profile") props.onOpenInsight?.();
 	else if (tile.kind === "song") props.onPlaySong?.(tile.index);
 	else if (tile.kind === "playlist") props.onOpenPlaylist?.(tile.index);
 	else if (tile.kind === "podcast") props.onOpenPodcast?.(tile.index);
@@ -146,23 +277,105 @@ export function EmptyHomeHost(props: EmptyHomeHostProps): ReactElement {
 	const thirdSong = discover?.dailySongs[2] ?? null;
 	const firstPlaylist = discover?.playlists[0] ?? null;
 	const firstPodcast = discover?.podcasts[0] ?? null;
-	const tiles = buildHomeTiles(discover, props.weatherRadio);
+	const listenSummary = props.listenSummary ?? null;
+	const tiles = buildHomeTiles(discover, props.weatherRadio, listenSummary);
+	const active = props.active !== false;
+	const loading = props.loading === true;
+	const waveSmoothRef = useRef<number[]>([]);
+	const [waveBars, setWaveBars] = useState<HomeWaveBar[]>(() => {
+		const frame = buildHomeWaveFrame({
+			timeMs: 0,
+			isPlaying: props.isPlaying,
+			positionMs: props.positionMs,
+			durationMs: props.durationMs,
+		});
+		waveSmoothRef.current = frame.smooth;
+		return frame.bars;
+	});
 	const libraryCover = firstPlaylist?.coverUrl || daily?.coverUrl;
 	const dailyCover = daily?.coverUrl;
 	const privateCover = privateSong?.coverUrl || daily?.coverUrl || firstPlaylist?.coverUrl;
-	const continueCover = firstPlaylist?.coverUrl;
-	const profileCover = firstPodcast?.coverUrl;
-	const moreCover = thirdSong?.coverUrl || firstPodcast?.coverUrl;
+	const recentTrack = listenSummary?.recent?.track ?? null;
+	const topSong = listenSummary?.topSong?.track ?? null;
+	const topArtist = listenSummary?.topArtist ?? null;
+	const continueCover = recentTrack?.coverUrl || firstPlaylist?.coverUrl;
+	const profileCover = topSong?.coverUrl || topArtist?.coverUrl || firstPodcast?.coverUrl;
+	const moreCover = thirdSong?.coverUrl || topSong?.coverUrl || recentTrack?.coverUrl || firstPodcast?.coverUrl;
+	const mosaicCovers = buildMosaicCovers(tiles);
+	const heroSubtitle = loggedOut
+		? "登录后会把你的歌单、常听歌手和最近播放放在这里；也可以直接搜索或导入本地音乐。"
+		: "从你的歌单、最近播放和常听歌手开始，天气电台放在需要氛围的时候再开。";
+
+	useEffect(() => {
+		if (!active) return;
+		let cancelled = false;
+		let timer: ReturnType<typeof setTimeout> | null = null;
+		const tick = () => {
+			const frame = buildHomeWaveFrame({
+				timeMs: typeof performance !== "undefined" ? performance.now() : Date.now(),
+				isPlaying: props.isPlaying,
+				positionMs: props.positionMs,
+				durationMs: props.durationMs,
+			}, waveSmoothRef.current);
+			waveSmoothRef.current = frame.smooth;
+			if (!cancelled) setWaveBars(frame.bars);
+			if (!cancelled) timer = setTimeout(tick, 80);
+		};
+		tick();
+		return () => {
+			cancelled = true;
+			if (timer) clearTimeout(timer);
+		};
+	}, [active, props.durationMs, props.isPlaying, props.positionMs]);
 
 	return (
 		<section id="empty-home" aria-label="Mineradio home">
 			<div className="empty-home-shell">
 				<div className="home-hero">
-					<div className="home-hero-inner home-construction-inner">
-						<div className="home-title home-construction-title">🚧此处施工，敬请期待🚧</div>
-						<button className="home-chip home-console-chip" type="button" onClick={props.onOpenConsole}>
+					<div className="home-hero-inner">
+						<div className="home-kicker" id="home-weather-kicker">Mineradio · Your Library</div>
+						<div className="home-title" id="home-weather-title">我的音乐库</div>
+						<div className="home-sub" id="home-subtitle">{heroSubtitle}</div>
+						<div className="home-weather-meta" id="home-weather-meta">
+							{weatherMeta(props.weatherRadio).map((meta) => (
+								<span className="home-weather-pill" key={meta}>{meta}</span>
+							))}
+						</div>
+						<div className="home-quick-row">
+							<button className="home-chip" data-home-chip="search" type="button" onClick={props.onSearchFocus}>
+								搜索音乐
+							</button>
+							<button className="home-chip" data-home-chip="library" type="button" onClick={props.onOpenLibrary}>
+								我的歌单
+							</button>
+							<button className="home-chip" data-home-chip="local" type="button" onClick={props.onUpload}>
+								导入本地
+							</button>
+							<button className="home-chip" data-home-chip="podcast" type="button" onClick={props.onOpenPodcastSearch}>
+								播客电台
+							</button>
+							<button className="home-chip home-console-chip" data-home-chip="console" type="button" onClick={props.onOpenConsole}>
 							展开播放器控制台
-						</button>
+							</button>
+						</div>
+						<div className="home-visual generated" aria-hidden="true">
+							<div className="home-sleeve" />
+							<div className="home-disc" />
+							<div className="home-wave-track" id="home-wave-track">
+								{waveBars.map((bar, index) => (
+									<span key={index} style={{ height: `${bar.height}px`, opacity: bar.opacity }} />
+								))}
+							</div>
+						</div>
+						<div className="home-mosaic" id="home-mosaic" aria-hidden="true">
+							{mosaicCovers.map((cover, index) => (
+								<div
+									className={`home-mosaic-cell${cover ? " has-cover" : ""}${!cover && loading ? " home-skeleton" : ""}`}
+									style={coverStyle(cover)}
+									key={`${cover ?? "empty"}-${index}`}
+								/>
+							))}
+						</div>
 					</div>
 				</div>
 
@@ -193,20 +406,20 @@ export function EmptyHomeHost(props: EmptyHomeHostProps): ReactElement {
 					</button>
 					<button className="home-card" data-home-card="continue" data-home-tone="mix" type="button" onClick={props.onPlayRecent}>
 						<div className="home-card-label">Continue</div>
-						<div className="home-card-title" id="home-continue-title">继续听</div>
-						<div className="home-card-sub" id="home-continue-sub">最近播放会出现在这里</div>
+						<div className="home-card-title" id="home-continue-title">{recentTrack?.title || "继续听"}</div>
+						<div className="home-card-sub" id="home-continue-sub">{recentTrack ? artistLine(recentTrack, "最近播放") : "最近播放会出现在这里"}</div>
 						<div className={cardCoverClass(continueCover)} id="home-continue-art" style={coverStyle(continueCover)} />
 					</button>
 					<button className="home-card" data-home-card="profile" data-home-tone="local" type="button" onClick={props.onOpenInsight}>
 						<div className="home-card-label">Profile</div>
-						<div className="home-card-title" id="home-profile-title">听歌画像</div>
-						<div className="home-card-sub" id="home-profile-sub">播放几首后生成偏好</div>
+						<div className="home-card-title" id="home-profile-title">{topArtist?.name || topSong?.title || "听歌画像"}</div>
+						<div className="home-card-sub" id="home-profile-sub">{topArtist ? `常听歌手 · ${topArtist.plays} 次` : (listenSummary?.totalPlays ? `${listenSummary.totalPlays} 次有效播放` : "播放几首后生成偏好")}</div>
 						<div className={cardCoverClass(profileCover)} id="home-profile-art" style={coverStyle(profileCover)} />
 					</button>
 					<button className="home-card" data-home-card="more" data-home-tone="local" type="button" onClick={() => props.onPlaySong?.(2)}>
 						<div className="home-card-label">Song</div>
-						<div className="home-card-title" id="home-library-title">{loggedOut ? "更多歌曲" : (thirdSong?.title || "更多歌曲")}</div>
-						<div className="home-card-sub" id="home-library-sub">{loggedOut ? "播放后会继续补全推荐" : (thirdSong ? artistLine(thirdSong) : "播放几首后生成你的偏好")}</div>
+						<div className="home-card-title" id="home-library-title">{loggedOut ? "更多歌曲" : (thirdSong?.title || topArtist?.name || "更多歌曲")}</div>
+						<div className="home-card-sub" id="home-library-sub">{loggedOut ? "播放后会继续补全推荐" : (thirdSong ? artistLine(thirdSong) : (topArtist ? `歌手偏好 · ${topArtist.plays} 次` : "播放几首后生成你的偏好"))}</div>
 						<div className={cardCoverClass(moreCover)} id="home-library-art" style={coverStyle(moreCover)} />
 					</button>
 				</div>
@@ -217,15 +430,15 @@ export function EmptyHomeHost(props: EmptyHomeHostProps): ReactElement {
 						<div className="home-section-note" id="home-rail-note">{loggedOut && !hasWeatherSongs ? "不会自动拉取外部推荐" : "刚刚更新 · 点击即可播放"}</div>
 					</div>
 					<div id="home-tile-row" className="home-tile-row">
-						{tiles.map((tile) => (
+						{tiles.map((tile, index) => (
 							<button
-								className="home-tile"
+								className={`home-tile${!homeTileCover(tile) && loading ? " home-skeleton" : ""}`}
 								data-home-tone={tile.tone}
 								type="button"
 								aria-label={`${tile.title} ${tile.action}`}
 								title={tile.action}
 								onClick={() => handleTileAction(props, tile)}
-								key={tile.title}
+								key={homeTileKey(tile, index)}
 							>
 								<div className={`home-tile-cover${"coverUrl" in tile && tile.coverUrl ? " has-cover" : ""}`} style={"coverUrl" in tile ? coverStyle(tile.coverUrl) : undefined} />
 								<div className="home-tile-title">{tile.title}</div>

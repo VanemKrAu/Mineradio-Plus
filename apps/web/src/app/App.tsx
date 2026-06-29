@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactElement,
@@ -79,7 +80,7 @@ import {
 } from "../components/shell/SidecarRecoveryNotice";
 import { TopRightControls } from "../components/shell/TopRightControls";
 import { UpdateHost } from "../components/shell/UpdateHost";
-import { EmptyHomeHost } from "../home/EmptyHomeHost";
+import { EmptyHomeHost, type HomeListenRecord, type HomeListenSummary } from "../home/EmptyHomeHost";
 import { SplashHost, type SplashHostProps } from "../visual/SplashHost";
 import {
   AI_DEPTH_STATUS_EVENT,
@@ -120,6 +121,7 @@ const SHOW_SPLASH = import.meta.env.VITE_SPLASH !== "0";
 const SIDECAR_STATUS_POLL_MS = 1500;
 const SIDECAR_RECOVERED_NOTICE_MS = 2600;
 const PLAYBACK_QUALITY_STORE_KEY = "mineradio-playback-quality-v1";
+const HOME_LISTEN_STATS_STORE_KEY = "mineradio-listen-stats-v1";
 const DEFAULT_GLOBAL_HOTKEYS: GlobalHotkeyBinding[] = [
   { action: "togglePlay", accelerator: "Control+Alt+Space" },
   { action: "prevTrack", accelerator: "Control+Alt+ArrowLeft" },
@@ -206,6 +208,22 @@ interface TrialBannerState {
   showLogin: boolean;
 }
 
+interface HomeListenHistoryRecord extends HomeListenRecord {
+  lastPlayedAt: number;
+  listenMs: number;
+  completed: number;
+}
+
+interface HomeListenSession {
+  key: string;
+  track: Track;
+  startedAt: number;
+  lastWallAt: number;
+  lastPositionMs: number;
+  listenMs: number;
+  maxProgress: number;
+}
+
 const DESKTOP_LYRIC_FONT_STACKS: Record<string, string> = {
   sans: 'Inter,"Noto Sans SC","PingFang SC","Microsoft YaHei",Arial,sans-serif',
   hei: '"Noto Sans SC","Microsoft YaHei",SimHei,"PingFang SC",sans-serif',
@@ -266,6 +284,136 @@ function trackArtist(track: Track | null | undefined): string {
 
 function trackLikeKey(track: Track | null | undefined): string {
   return track?.provider && track.id ? `${track.provider}:${track.id}` : "";
+}
+
+function updateHomeListenHistory(
+  history: HomeListenHistoryRecord[],
+  track: Track | null,
+  now: number,
+  listenMs = 0,
+  completed = false,
+): HomeListenHistoryRecord[] {
+  if (!track?.id || !track.title) return history;
+  const key = trackLikeKey(track) || `${track.provider}:${track.sourceId || track.title}`;
+  const existing = history.find((record) => {
+    const recordKey = trackLikeKey(record.track) || `${record.track.provider}:${record.track.sourceId || record.track.title}`;
+    return recordKey === key;
+  });
+  const nextRecord: HomeListenHistoryRecord = {
+    track,
+    plays: (existing?.plays ?? 0) + 1,
+    lastPlayedAt: now,
+    listenMs: (existing?.listenMs ?? 0) + Math.round(listenMs),
+    completed: (existing?.completed ?? 0) + (completed ? 1 : 0),
+  };
+  return [nextRecord, ...history.filter((record) => record !== existing)].slice(0, 24);
+}
+
+function readHomeListenHistory(): HomeListenHistoryRecord[] {
+  if (typeof localStorage === "undefined") return [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(HOME_LISTEN_STATS_STORE_KEY) || "{}") as { history?: unknown };
+    const rawHistory = Array.isArray(parsed.history) ? parsed.history : [];
+    return rawHistory.slice(0, 24).flatMap((item): HomeListenHistoryRecord[] => {
+      if (!item || typeof item !== "object") return [];
+      const record = item as Record<string, unknown>;
+      const track = record.track as Track | undefined;
+      if (!track?.id || !track.title) return [];
+      return [{
+        track,
+        plays: Math.max(1, Number(record.plays) || 1),
+        lastPlayedAt: Math.max(0, Number(record.lastPlayedAt) || 0),
+        listenMs: Math.max(0, Number(record.listenMs) || 0),
+        completed: Math.max(0, Number(record.completed) || 0),
+      }];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function writeHomeListenHistory(history: HomeListenHistoryRecord[]): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(HOME_LISTEN_STATS_STORE_KEY, JSON.stringify({
+      history: history.slice(0, 24),
+      updatedAt: Date.now(),
+    }));
+  } catch {
+  }
+}
+
+function beginHomeListenSession(track: Track | null, now: number, positionMs = 0): HomeListenSession | null {
+  const key = trackLikeKey(track);
+  if (!track || !key) return null;
+  return {
+    key,
+    track,
+    startedAt: now,
+    lastWallAt: now,
+    lastPositionMs: positionMs,
+    listenMs: 0,
+    maxProgress: 0,
+  };
+}
+
+function updateHomeListenSession(
+  session: HomeListenSession | null,
+  positionMs: number,
+  durationMs: number | null,
+  now: number,
+  force = false,
+): HomeListenSession | null {
+  if (!session) return null;
+  const deltaByAudio = Math.max(0, positionMs - session.lastPositionMs);
+  const deltaByWall = Math.max(0, now - session.lastWallAt);
+  let delta = deltaByAudio > 0 ? Math.min(deltaByAudio, deltaByWall || deltaByAudio, 4200) : 0;
+  if (force && delta <= 0) delta = Math.min(deltaByWall, 1500);
+  return {
+    ...session,
+    listenMs: delta > 0 && delta < 8000 ? session.listenMs + delta : session.listenMs,
+    lastWallAt: now,
+    lastPositionMs: positionMs,
+    maxProgress: durationMs && durationMs > 0
+      ? Math.max(session.maxProgress, positionMs / durationMs)
+      : session.maxProgress,
+  };
+}
+
+function isEffectiveHomeListenSession(
+  session: HomeListenSession,
+  completed: boolean,
+  durationMs: number | null,
+): boolean {
+  return completed || session.listenMs >= 45000 || session.maxProgress >= 0.5 || (!durationMs && session.listenMs >= 30000);
+}
+
+function buildHomeListenSummary(history: HomeListenHistoryRecord[]): HomeListenSummary | null {
+  if (!history.length) return null;
+  const recent = [...history].sort((a, b) => b.lastPlayedAt - a.lastPlayedAt)[0] ?? null;
+  const topSong = [...history].sort((a, b) => b.plays - a.plays || b.lastPlayedAt - a.lastPlayedAt)[0] ?? null;
+  const artistCounts = new Map<string, { plays: number; coverUrl?: string; lastPlayedAt: number }>();
+  for (const record of history) {
+    for (const artist of record.track.artists ?? []) {
+      if (!artist) continue;
+      const current = artistCounts.get(artist) ?? { plays: 0, coverUrl: record.track.coverUrl, lastPlayedAt: 0 };
+      current.plays += record.plays;
+      if (!current.coverUrl) current.coverUrl = record.track.coverUrl;
+      current.lastPlayedAt = Math.max(current.lastPlayedAt, record.lastPlayedAt);
+      artistCounts.set(artist, current);
+    }
+  }
+  const topArtistEntry = [...artistCounts.entries()]
+    .sort((a, b) => b[1].plays - a[1].plays || b[1].lastPlayedAt - a[1].lastPlayedAt)[0];
+  const totalPlays = history.reduce((sum, record) => sum + record.plays, 0);
+  return {
+    recent,
+    topSong,
+    topArtist: topArtistEntry
+      ? { name: topArtistEntry[0], plays: topArtistEntry[1].plays, coverUrl: topArtistEntry[1].coverUrl }
+      : null,
+    totalPlays,
+  };
 }
 
 function isNeteaseLikeSupported(track: Track | null | undefined): track is Track {
@@ -608,6 +756,11 @@ export function App({
     useState<DiscoverHomeResponse | null>(null);
   const [homeWeatherRadio, setHomeWeatherRadio] =
     useState<WeatherRadioResponse | null>(null);
+  const [homeDiscoverLoading, setHomeDiscoverLoading] = useState(false);
+  const [homeWeatherRadioLoading, setHomeWeatherRadioLoading] = useState(false);
+  const [homeListenHistory, setHomeListenHistory] = useState<
+    HomeListenHistoryRecord[]
+  >(readHomeListenHistory);
 
   const currentTrack = usePlaybackStore((s) => s.currentTrack);
   const queue = usePlaybackStore((s) => s.queue);
@@ -703,6 +856,8 @@ export function App({
   const likeStatusRequestSeqRef = useRef(0);
   const homeDiscoverRequestSeqRef = useRef(0);
   const homeWeatherRadioRequestSeqRef = useRef(0);
+  const lastHomeListenKeyRef = useRef("");
+  const homeListenSessionRef = useRef<HomeListenSession | null>(null);
 
   const positionRef = useRef(positionMs);
   positionRef.current = positionMs;
@@ -747,6 +902,10 @@ export function App({
   const currentLiked = currentLikeKey ? likedSongMap[currentLikeKey] === true : false;
   const currentLikeBusy = currentLikeKey ? likeBusyMap[currentLikeKey] === true : false;
   const currentHasCustomCover = hasCustomCoverForTrack(currentTrack);
+  const homeListenSummary = useMemo(
+    () => buildHomeListenSummary(homeListenHistory),
+    [homeListenHistory],
+  );
   void customLyricVersion;
 
   const revealConsole = useCallback(() => {
@@ -758,7 +917,7 @@ export function App({
   const focusSearch = useCallback(() => {
     if (typeof document === "undefined") return;
     const input = document.getElementById("search-input");
-    if (input instanceof HTMLInputElement) input.focus();
+    if (input instanceof HTMLElement && input.tagName === "INPUT") input.focus();
   }, []);
 
   const searchQuery = useCallback(
@@ -1133,9 +1292,11 @@ export function App({
     const client = sidecarClient;
     if (!client) {
       setHomeDiscover(null);
+      setHomeDiscoverLoading(false);
       return null;
     }
     const seq = ++homeDiscoverRequestSeqRef.current;
+    setHomeDiscoverLoading(true);
     try {
       const next = await client.discoverHome();
       if (seq === homeDiscoverRequestSeqRef.current) setHomeDiscover(next);
@@ -1152,6 +1313,8 @@ export function App({
       };
       if (seq === homeDiscoverRequestSeqRef.current) setHomeDiscover(fallback);
       return fallback;
+    } finally {
+      if (seq === homeDiscoverRequestSeqRef.current) setHomeDiscoverLoading(false);
     }
   }, [sidecarClient]);
 
@@ -1160,9 +1323,11 @@ export function App({
     const weatherRadio = client?.weatherRadio;
     if (!client || typeof weatherRadio !== "function") {
       setHomeWeatherRadio(null);
+      setHomeWeatherRadioLoading(false);
       return null;
     }
     const seq = ++homeWeatherRadioRequestSeqRef.current;
+    setHomeWeatherRadioLoading(true);
     try {
       const next = await weatherRadio.call(client, {
         city: "上海",
@@ -1173,6 +1338,8 @@ export function App({
     } catch {
       if (seq === homeWeatherRadioRequestSeqRef.current) setHomeWeatherRadio(null);
       return null;
+    } finally {
+      if (seq === homeWeatherRadioRequestSeqRef.current) setHomeWeatherRadioLoading(false);
     }
   }, [sidecarClient]);
 
@@ -1180,6 +1347,8 @@ export function App({
     if (!sidecarClient) {
       setHomeDiscover(null);
       setHomeWeatherRadio(null);
+      setHomeDiscoverLoading(false);
+      setHomeWeatherRadioLoading(false);
       return;
     }
     void refreshHomeDiscover();
@@ -1191,6 +1360,36 @@ export function App({
     refreshHomeWeatherRadio,
     sidecarClient,
   ]);
+
+  const finalizeHomeListenSession = useCallback((completed = false) => {
+    const session = updateHomeListenSession(
+      homeListenSessionRef.current,
+      usePlaybackStore.getState().positionMs,
+      usePlaybackStore.getState().durationMs,
+      Date.now(),
+      true,
+    );
+    homeListenSessionRef.current = null;
+    if (!session || !isEffectiveHomeListenSession(session, completed, usePlaybackStore.getState().durationMs)) return;
+    setHomeListenHistory((history) => {
+      const next = updateHomeListenHistory(history, session.track, Date.now(), session.listenMs, completed);
+      writeHomeListenHistory(next);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const key = trackLikeKey(currentTrack);
+    if (!currentTrack || !key) {
+      finalizeHomeListenSession(false);
+      lastHomeListenKeyRef.current = "";
+      return;
+    }
+    if (key === lastHomeListenKeyRef.current) return;
+    finalizeHomeListenSession(false);
+    lastHomeListenKeyRef.current = key;
+    homeListenSessionRef.current = beginHomeListenSession(currentTrack, Date.now(), positionMs);
+  }, [currentTrack, finalizeHomeListenSession, positionMs]);
 
   const openHomeProductGuide = useCallback(() => {
     revealConsole();
@@ -1450,12 +1649,29 @@ export function App({
   }, [searchQuery]);
 
   const openHomeInsight = useCallback(() => {
+    const artist = homeListenSummary?.topArtist?.name;
+    if (artist) {
+      searchQuery(artist);
+      return;
+    }
+    const song = homeListenSummary?.topSong?.track.title;
+    if (song) {
+      searchQuery(song);
+      return;
+    }
     showToast("播放几首歌后会生成听歌画像");
-  }, [showToast]);
+  }, [homeListenSummary, searchQuery, showToast]);
 
   const playHomeRecent = useCallback(() => {
+    const track = homeListenSummary?.recent?.track;
+    if (track) {
+      usePlaybackStore.getState().setQueue([track]);
+      usePlaybackStore.getState().playAt(0);
+      enterPlaybackSurface();
+      return;
+    }
     showToast("还没有听歌记录");
-  }, [showToast]);
+  }, [enterPlaybackSurface, homeListenSummary, showToast]);
 
   const openCollectPicker = useCallback(
     (track: Track) => {
@@ -2252,6 +2468,12 @@ export function App({
         lastDuration = payload.durationMs;
         setDurationMs(payload.durationMs);
       }
+      homeListenSessionRef.current = updateHomeListenSession(
+        homeListenSessionRef.current,
+        payload.positionMs,
+        payload.durationMs,
+        Date.now(),
+      );
       const idx = selectCurrentIndex(
         payload.positionMs,
         lyricsPayloadRef.current,
@@ -2267,9 +2489,17 @@ export function App({
       setPlaying(true);
     });
     controller.on("pause", () => {
+      homeListenSessionRef.current = updateHomeListenSession(
+        homeListenSessionRef.current,
+        usePlaybackStore.getState().positionMs,
+        usePlaybackStore.getState().durationMs,
+        Date.now(),
+        true,
+      );
       setPlaying(false);
     });
     controller.on("ended", () => {
+      finalizeHomeListenSession(true);
       setPositionMs(0);
       usePlaybackStore.getState().ended();
       if (
@@ -2296,6 +2526,7 @@ export function App({
     setPlaying,
     setPositionMs,
     setSearchError,
+    finalizeHomeListenSession,
     showToast,
   ]);
 
@@ -2587,6 +2818,12 @@ export function App({
       <EmptyHomeHost
         discover={homeDiscover}
         weatherRadio={homeWeatherRadio}
+        listenSummary={homeListenSummary}
+        active={emptyHomeActive}
+        loading={homeDiscoverLoading || homeWeatherRadioLoading}
+        isPlaying={isPlaying}
+        positionMs={positionMs}
+        durationMs={durationMs}
         onSearchFocus={focusSearch}
         onOpenLibrary={openHomeLibrary}
         onOpenConsole={revealConsole}
