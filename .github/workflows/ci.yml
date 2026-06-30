@@ -95,6 +95,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build web app for Tauri context
+        run: bun run web:build
+
       - name: Install Linux Tauri dependencies
         if: runner.os == 'Linux'
         run: |
