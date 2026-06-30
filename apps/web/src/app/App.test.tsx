@@ -33,6 +33,11 @@ test("web index preloads the baseline simple or DIY mode class before React moun
 	expect(html).toContain("simple-mode-preload");
 });
 
+test("App mounts the baseline guide particle canvas host", async () => {
+	const source = await fetch(new URL("./App.tsx", import.meta.url)).then((response) => response.text());
+	expect(source).toContain("GuideParticlesHost");
+});
+
 class AppStubAudioElement extends EventTarget {
 	currentTime = 0;
 	duration = Number.NaN;

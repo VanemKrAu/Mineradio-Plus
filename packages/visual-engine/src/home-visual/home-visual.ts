@@ -40,6 +40,7 @@ export interface HomeVisualOptions {
 	backCoverRandom?: () => number;
 	skullAssetData?: Float32Array | null;
 	loadSkullAsset?: () => Promise<Float32Array | null>;
+	orbitCenterLockedSupplier?: () => boolean;
 }
 
 export interface HomeVisual {
@@ -57,6 +58,8 @@ export interface HomeVisual {
 	getSkullBeatFlash(): number;
 	setSkullShelfCompositionActive(active: boolean): void;
 	setWallpaperShelfDimActive(active: boolean): void;
+	applySkullWheel(deltaY: number): boolean;
+	getSkullWheelZoom(): number;
 	applyPointerSpinDrag(dx: number, dy: number, dtSeconds: number): void;
 	resetParticleRotation(syncVisual?: boolean): void;
 	whenIdle(): Promise<void>;
@@ -71,6 +74,11 @@ const PARTICLE_SPIN_MAX = 6.2;
 function clampParticleSpinVelocity(v: number): number {
 	if (!Number.isFinite(v)) return 0;
 	return Math.max(-PARTICLE_SPIN_MAX, Math.min(PARTICLE_SPIN_MAX, v));
+}
+
+function clampRange(v: number, lo: number, hi: number): number {
+	if (!Number.isFinite(v)) return lo;
+	return Math.max(lo, Math.min(hi, v));
 }
 
 async function defaultLoadSkullAssetData(): Promise<Float32Array | null> {
@@ -107,11 +115,20 @@ export async function createHomeVisual(opts: HomeVisualOptions): Promise<HomeVis
 	const skullAssetData = opts.skullAssetData !== undefined
 		? opts.skullAssetData
 		: await (opts.loadSkullAsset ?? defaultLoadSkullAssetData)();
+	const particleSpin = { vx: 0, vy: 0, damping: 0.90 };
+	const gestureRotation = { x: 0, y: 0 };
+	let skullWheelZoom = 0;
+	let skullWheelZoomTarget = 0;
+	let latestHeadParallax = { active: false, x: 0, y: 0 };
 	const skullParticles: SkullParticleController = await createSkullParticleController({
 		scene: opts.scene,
 		threeFactory: opts.threeFactory,
 		uniforms: field.materialUniforms,
 		assetData: skullAssetData,
+		wheelZoomSupplier: () => skullWheelZoom,
+		headParallaxSupplier: () => latestHeadParallax,
+		gestureRotationSupplier: () => gestureRotation,
+		orbitCenterLockedSupplier: opts.orbitCenterLockedSupplier,
 	});
 	const coverController = createHomeCoverTextureController({
 		uniforms: field.materialUniforms as never,
@@ -141,8 +158,6 @@ export async function createHomeVisual(opts: HomeVisualOptions): Promise<HomeVis
 	let backCoverLayer: BackCoverLayer | null = null;
 	let backCoverPending: Promise<void> | null = null;
 	let latestPreparedCover: HomeCoverImage | null = null;
-	const particleSpin = { vx: 0, vy: 0, damping: 0.90 };
-	const gestureRotation = { x: 0, y: 0 };
 	field.applyFxState(fx);
 	field.bloomPoints.visible = !!(fx.bloom && fx.bloomStrength > 0.01) && fx.preset !== SKULL_PRESET_INDEX;
 	field.points.visible = fx.preset !== SKULL_PRESET_INDEX;
@@ -249,6 +264,13 @@ export async function createHomeVisual(opts: HomeVisualOptions): Promise<HomeVis
 		coverController.advanceColorMix(ctx.dt);
 		coverController.advanceDepth(ctx.dt);
 		tickPointerRotation(ctx.dt);
+		latestHeadParallax = {
+			active: fx.mouseActive === true,
+			x: Number(ctx.pointerParallax?.x) || 0,
+			y: Number(ctx.pointerParallax?.y) || 0,
+		};
+		if (fx.preset !== SKULL_PRESET_INDEX) skullWheelZoomTarget = 0;
+		skullWheelZoom += (skullWheelZoomTarget - skullWheelZoom) * Math.min(1, ctx.dt * 8.0);
 		skullParticles.update(ctx, fx);
 	}
 
@@ -298,6 +320,14 @@ export async function createHomeVisual(opts: HomeVisualOptions): Promise<HomeVis
 		},
 		setWallpaperShelfDimActive(active) {
 			wallpaperShelfDimActive = !!active;
+		},
+		applySkullWheel(deltaY) {
+			if (fx.preset !== SKULL_PRESET_INDEX) return false;
+			skullWheelZoomTarget = clampRange(skullWheelZoomTarget + deltaY * 0.00155, -0.95, 1.28);
+			return true;
+		},
+		getSkullWheelZoom() {
+			return skullWheelZoom;
 		},
 		applyPointerSpinDrag(dx, dy, dtSeconds) {
 			const dt = Math.max(1 / 120, Math.min(0.08, Number(dtSeconds) || 1 / 60));

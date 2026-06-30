@@ -17,6 +17,10 @@ export interface SkullParticleControllerOptions {
 	threeFactory?: ThreeFactory;
 	uniforms: Record<string, THREE.IUniform>;
 	assetData?: Float32Array | null;
+	wheelZoomSupplier?: () => number;
+	headParallaxSupplier?: () => { active?: boolean; x?: number; y?: number } | null | undefined;
+	gestureRotationSupplier?: () => { x?: number; y?: number } | null | undefined;
+	orbitCenterLockedSupplier?: () => boolean;
 }
 
 export interface SkullParticleController {
@@ -203,7 +207,8 @@ export async function createSkullParticleController(
 			const ampTarget = clamp(ctx.snapshot.bass * 0.006 + ctx.snapshot.mid * 0.004 + beatFlash * 0.070, 0, 0.090);
 			ampPulse += (ampTarget - ampPulse) * Math.min(1, ctx.dt * (ampTarget > ampPulse ? 11.0 : 4.0));
 			const baseScale = SKULL_MODEL_SCALE + (SKULL_SHELF_COMPOSITION_SCALE - SKULL_MODEL_SCALE) * shelfMix;
-			const targetScale = baseScale * (1 + ampPulse);
+			const wheelZoom = clamp(Number(opts.wheelZoomSupplier?.() ?? 0), -0.95, 1.28);
+			const targetScale = baseScale * (1 + ampPulse) * clamp(1 - wheelZoom * 0.055, 0.92, 1.08);
 			const targetX = SKULL_MODEL_BASE_POSITION.x + (SKULL_SHELF_COMPOSITION_POSITION.x - SKULL_MODEL_BASE_POSITION.x) * shelfMix + drift.x;
 			const targetY = SKULL_MODEL_BASE_POSITION.y + (SKULL_SHELF_COMPOSITION_POSITION.y - SKULL_MODEL_BASE_POSITION.y) * shelfMix + drift.y;
 			const targetZ = SKULL_MODEL_BASE_POSITION.z + (SKULL_SHELF_COMPOSITION_POSITION.z - SKULL_MODEL_BASE_POSITION.z) * shelfMix + drift.z;
@@ -214,8 +219,17 @@ export async function createSkullParticleController(
 			object.scale.y = object.scale.x;
 			object.scale.z = object.scale.x;
 			const rotEase = Math.min(1, ctx.dt * 7.4);
-			object.rotation.y += (SKULL_MODEL_BASE_ROTATION_Y - object.rotation.y) * rotEase;
-			object.rotation.x += (SKULL_MODEL_BASE_ROTATION_X - object.rotation.x) * rotEase;
+			const centerLocked = opts.orbitCenterLockedSupplier?.() === true;
+			const headParallax = opts.headParallaxSupplier?.() ?? null;
+			const gestureRotation = opts.gestureRotationSupplier?.() ?? null;
+			const parallaxX = headParallax?.active ? Number(headParallax.x) || 0 : 0;
+			const parallaxY = headParallax?.active ? Number(headParallax.y) || 0 : 0;
+			const gestureX = Number(gestureRotation?.x) || 0;
+			const gestureY = Number(gestureRotation?.y) || 0;
+			const targetRotY = SKULL_MODEL_BASE_ROTATION_Y + (centerLocked ? 0 : parallaxX * 0.5 + gestureY);
+			const targetRotX = SKULL_MODEL_BASE_ROTATION_X + (centerLocked ? 0 : -parallaxY * 0.35 + gestureX);
+			object.rotation.y += (targetRotY - object.rotation.y) * rotEase;
+			object.rotation.x += (targetRotX - object.rotation.x) * rotEase;
 			object.rotation.z += (0 - object.rotation.z) * Math.min(1, ctx.dt * 6.0);
 		},
 		getObject() {
@@ -276,6 +290,9 @@ export const SKULL_PARTICLE_VERTEX_SHADER = [
 	"  float toothNoise = fract(sin(seed * 21.731 + floor((position.x + 0.52) * 21.0) * 5.137) * 43758.5453);",
 	"  pos.y += toothBand * (toothNoise - 0.5) * 0.020;",
 	"  pos.z += toothBand * (fract(sin(seed * 17.923 + position.y * 31.0) * 24634.6345) - 0.5) * 0.012;",
+	"  float jawSidePull = jawGroup * smoothstep(-0.42, -1.06, position.y) * smoothstep(0.24, 0.62, abs(position.x)) * (1.0 - smoothstep(0.78, 1.04, abs(position.x))) * smoothstep(0.16, 0.70, position.z);",
+	"  pos.x *= 1.0 - jawSidePull * 0.10;",
+	"  float fallbackJaw = smoothstep(-0.48, -0.90, position.y) * smoothstep(0.08, 0.52, position.z) * (1.0 - smoothstep(0.62, 0.96, abs(position.x)));",
 	"  float jawMask = jawGroup;",
 	"  float jawSideAnchor = smoothstep(0.36, 0.66, abs(position.x)) * (1.0 - smoothstep(0.78, 0.98, abs(position.x))) * smoothstep(-0.34, -0.74, position.y) * (1.0 - smoothstep(0.62, 0.86, position.z));",
 	"  float jawMotion = jawMask * (1.0 - jawSideAnchor * 0.32);",
@@ -298,13 +315,18 @@ export const SKULL_PARTICLE_VERTEX_SHADER = [
 	"  float dist = max(0.55, -mv.z);",
 	"  vec3 vn = normalize(normalMatrix * n);",
 	"  vec3 keyDir = normalize(vec3(-0.48, 0.64, 0.60));",
+	"  vec3 lowDir = normalize(vec3(-0.10, -0.78, 0.34));",
+	"  vec3 fillDir = normalize(vec3(0.36, -0.04, 0.64));",
 	"  vec3 rimDir = normalize(vec3(0.88, 0.18, -0.44));",
 	"  float key = pow(max(dot(vn, keyDir), 0.0), 1.18);",
+	"  float low = pow(max(dot(vn, lowDir), 0.0), 1.34) * 0.10;",
+	"  float fill = max(dot(vn, fillDir), 0.0) * 0.055;",
 	"  float gothicShadow = smoothstep(-0.10, 0.36, dot(vn, normalize(vec3(0.44, -0.06, -0.58))));",
+	"  float dentalLift = smoothstep(0.48, 0.72, position.z) * (1.0 - smoothstep(0.30, 0.54, abs(position.x))) * (1.0 - smoothstep(0.18, 0.48, abs(position.y + 0.70))) * (0.62 + toothNoise * 0.20);",
 	"  vRim = pow(max(dot(vn, rimDir), 0.0), 2.50) * (0.24 + uBloomStrength * 0.08 + vFlash * 0.62);",
 	"  float dust = fract(sin(seed * 13.871 + position.x * 19.7 + position.y * 7.1) * 43758.5453);",
 	"  vDensity = clamp(0.30 + key * 0.70 + vRim * 0.24 - gothicShadow * 0.24 + dust * 0.025 + vFlash * 0.08, 0.16, 1.20);",
-	"  vLight = clamp(0.115 + key * 1.02 + boneKind * 0.070 + vAmp * 0.56 - gothicShadow * 0.08, 0.035, 1.72);",
+	"  vLight = clamp(0.115 + key * 1.02 + low + fill + dentalLift * 0.20 + boneKind * 0.070 + vAmp * 0.56 - gothicShadow * 0.08, 0.035, 1.72);",
 	"  float scaleCtl = clamp(uPointScale, 0.48, 2.35);",
 	"  float size = (0.035 + boneKind * 0.026) * (0.84 + vDensity * 0.22 + vLight * 0.13 + uBloomStrength * 0.030 + vFlash * 0.18);",
 	"  gl_PointSize = clamp(size * uPixel * scaleCtl * 128.0 / dist, 0.95, 7.60);",

@@ -5,6 +5,7 @@ import {
 	createBeatMapScheduler,
 	createCinemaCamera,
 	createConnectorParticles,
+	createLyricParticles,
 	createHomeVisual,
 	createDefaultFreeCameraState,
 	cloneFxState,
@@ -28,6 +29,7 @@ import {
 	type HomeVisual,
 	type LyricLine as VisualLyricLine,
 	type LyricPalette,
+	type LyricParticles,
 	type RendererHandle,
 	type RenderLoop,
 	type ConnectorParticles,
@@ -106,6 +108,7 @@ interface MountedHandles {
 	homeVisual: HomeVisual;
 	shelfManager: ShelfManager;
 	connectorParticles: ConnectorParticles;
+	lyricParticles: LyricParticles;
 	lifecycle: StageLyricsLifecycle;
 	renderLoop: RenderLoop;
 	shelfSelectSound: ShelfSelectSoundPlayer | null;
@@ -113,6 +116,7 @@ interface MountedHandles {
 	offHome: () => void;
 	offCamera: () => void;
 	offShelf: () => void;
+	offLyricParticles: () => void;
 	offLyrics: () => void;
 	offAudio: () => void;
 	offHomeAudio: () => void;
@@ -531,6 +535,7 @@ function attachBaselineCanvasPointerInput(input: {
 		event.preventDefault();
 		const orbit = input.cinema.getState().orbit;
 		orbit.centerLocked = false;
+		if (input.homeVisual.applySkullWheel(event.deltaY)) return;
 		orbit.userRadius = Math.max(orbit.minRadius, Math.min(orbit.maxRadius, orbit.userRadius + event.deltaY * 0.005));
 	};
 
@@ -826,6 +831,10 @@ function disposeHandles(handles: MountedHandles | null): void {
 	} catch {
 	}
 	try {
+		handles.offLyricParticles();
+	} catch {
+	}
+	try {
 		handles.offLyrics();
 	} catch {
 	}
@@ -871,6 +880,10 @@ function disposeHandles(handles: MountedHandles | null): void {
 	}
 	try {
 		handles.connectorParticles.dispose();
+	} catch {
+	}
+	try {
+		handles.lyricParticles.dispose();
 	} catch {
 	}
 	try {
@@ -961,6 +974,7 @@ export function useVisualEngine(refs: VisualEngineRefs): void {
 				coverResolution: refs.coverResolution,
 				fx: runtimeFx,
 				estimateAiDepth: aiDepthEstimatorRef.current ?? undefined,
+				orbitCenterLockedSupplier: () => cinema.getState().orbit.centerLocked,
 				onCoverLyricPalette: (palette) => {
 					latestCoverLyricPalette = palette;
 					lastAppliedLyricPaletteKey = "";
@@ -1037,6 +1051,25 @@ export function useVisualEngine(refs: VisualEngineRefs): void {
 				connectorParticles.object.renderOrder = 49;
 			}
 			if (cancelled || disposedRef.current) {
+				connectorParticles.dispose();
+				shelfManager.dispose();
+				homeVisual.dispose();
+				audioEngine.dispose();
+				frameSource.dispose();
+				cinema.dispose();
+				offResize();
+				renderer.dispose();
+				return;
+			}
+			const lyricParticles = await createLyricParticles({
+				scene: renderer.scene,
+				pixelScale: 1,
+			});
+			if (lyricParticles.object) {
+				lyricParticles.object.visible = runtimeFx.particleLyrics !== false;
+			}
+			if (cancelled || disposedRef.current) {
+				lyricParticles.dispose();
 				connectorParticles.dispose();
 				shelfManager.dispose();
 				homeVisual.dispose();
@@ -1275,7 +1308,7 @@ export function useVisualEngine(refs: VisualEngineRefs): void {
 							pinnedOpen: shelfManager.getShelfPinnedOpen(),
 							hasOpenContent: shelfManager.hasOpenContent(),
 						}),
-						zoom: 0,
+						zoom: homeVisual.getSkullWheelZoom(),
 					});
 				}
 			});
@@ -1308,6 +1341,12 @@ export function useVisualEngine(refs: VisualEngineRefs): void {
 				}
 				connectorParticles.setIntensity(connectorVisible ? shelfManager.getShelfVisibility() : 0);
 				connectorParticles.update(ctx);
+			});
+			const offLyricParticles = renderLoop.registerStep(RenderStepSlot.LyricParticles, (ctx) => {
+				const fx = mergeFxState(mergeFxState(cloneFxState(), refs.fxDefaults), refs.fxRef?.current);
+				if (lyricParticles.object) lyricParticles.object.visible = fx.particleLyrics !== false;
+				lyricParticles.setGlowStrength(fx.lyricGlow ? Math.min(0.85, Math.max(0, Number(fx.lyricGlowStrength) || 0)) : 0.28);
+				lyricParticles.update(ctx);
 			});
 			const offLyrics = renderLoop.registerStep(RenderStepSlot.StageLyrics, (ctx) => {
 				lifecycle.update(ctx);
@@ -1353,6 +1392,7 @@ export function useVisualEngine(refs: VisualEngineRefs): void {
 			if (cancelled || disposedRef.current) {
 				offAudio();
 				offLyrics();
+				offLyricParticles();
 				offShelf();
 				offCamera();
 				offHome();
@@ -1360,6 +1400,7 @@ export function useVisualEngine(refs: VisualEngineRefs): void {
 				offResize();
 				renderLoop.dispose();
 				lifecycle.dispose();
+				lyricParticles.dispose();
 				connectorParticles.dispose();
 				shelfManager.dispose();
 				homeVisual.dispose();
@@ -1456,6 +1497,7 @@ export function useVisualEngine(refs: VisualEngineRefs): void {
 				homeVisual,
 				shelfManager,
 				connectorParticles,
+				lyricParticles,
 				lifecycle,
 				renderLoop,
 				shelfSelectSound,
@@ -1463,6 +1505,7 @@ export function useVisualEngine(refs: VisualEngineRefs): void {
 				offHome,
 				offCamera,
 				offShelf,
+				offLyricParticles,
 				offLyrics,
 				offAudio,
 				offHomeAudio,

@@ -69,6 +69,7 @@ import {
 } from "../tauri/runtime";
 import { checkForUpdate, getUpdaterStatus, installUpdate } from "../tauri/updater";
 import { BottomControlsHost } from "../components/shell/BottomControlsHost";
+import { GuideParticlesHost } from "../components/shell/GuideParticlesHost";
 import { PlaylistPanelHost, type PlaylistPanelTab } from "../components/shell/PlaylistPanelHost";
 import { SearchShell, type SearchMode } from "../components/shell/SearchShell";
 import {
@@ -3376,6 +3377,7 @@ export function App({
         onShelfOpenContentChange={setShelfDetailOpen}
         desktopLyricsMotionRef={desktopLyricsMotionRef}
       />
+      <GuideParticlesHost />
       <div id="ai-depth-chip" className={aiDepthChip.visible ? "show" : ""}>
         <div className="mini-spin" />
         <span id="ai-depth-text">{aiDepthChip.text}</span>

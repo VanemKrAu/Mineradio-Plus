@@ -24,89 +24,59 @@ export interface ConnectorParticles {
 const DEFAULT_THREE_FACTORY: ThreeFactory = async () => await import("three");
 
 const CONNECTOR_VERTEX_SHADER = `
-attribute float aRand;
-attribute float aT;
+precision highp float;
+uniform float uTime, uPixel;
 attribute vec3 aColor;
-uniform float uTime;
-uniform float uTrackScale;
-uniform float uPixel;
-varying float vT;
-varying float vRand;
-varying vec3 vColor;
-varying float vAlpha;
+attribute float aRand;
+varying vec3 vC;
+varying float vA;
 void main(){
-	vT = aT;
-	vRand = aRand;
-	vColor = aColor;
 	vec3 p = position;
 	p.x += sin(uTime * 0.4 + aRand * 6.0) * 1.5;
 	p.y += sin(uTime * 0.6 + aRand * 4.0) * 0.2;
 	p.z += cos(uTime * 0.5 + aRand * 5.0) * 0.4;
-	vAlpha = 0.4 + 0.4 * sin(uTime * 1.5 + aRand * 7.0);
-	vec4 mv = modelViewMatrix * vec4(p, 1.0);
-	gl_PointSize = 4.0 * uPixel * uTrackScale;
-	gl_Position = projectionMatrix * mv;
+	vC = aColor; vA = 0.4 + 0.4 * sin(uTime * 1.5 + aRand * 7.0);
+	vec4 m = modelViewMatrix * vec4(p, 1.0);
+	gl_PointSize = 4.0 * uPixel;
+	gl_Position = projectionMatrix * m;
 }
 `;
 
 const CONNECTOR_FRAGMENT_SHADER = `
-precision mediump float;
-uniform float uIntensity;
+precision highp float;
 uniform sampler2D uDotTex;
-varying float vT;
-varying float vRand;
-varying vec3 vColor;
-varying float vAlpha;
+varying vec3 vC;
+varying float vA;
 void main(){
 	vec4 t = texture2D(uDotTex, gl_PointCoord);
 	if (t.a < 0.02) discard;
-	float a = t.a * vAlpha * uIntensity;
-	vec3 c = vColor * (0.92 + vRand * 0.08 + vT * 0.0);
-	gl_FragColor = vec4(c, a);
+	gl_FragColor = vec4(vC, t.a * vA);
 }
 `;
 
 type UniformsRecord = {
 	uTime: THREE.IUniform<number>;
-	uEnergy: THREE.IUniform<number>;
-	uIntensity: THREE.IUniform<number>;
-	uColorMix: THREE.IUniform<number>;
 	uPixel: THREE.IUniform<number>;
-	uTrackScale: THREE.IUniform<number>;
 	uDotTex: THREE.IUniform<THREE.Texture | null>;
 };
 
-function makeSeededRng(seed: number): () => number {
-	let s = (seed | 0) || 1;
-	return () => {
-		s = (s * 1664525 + 1013904223) | 0;
-		const u = s >>> 0;
-		return u / 4294967296;
-	};
-}
-
-function buildGeometry(THREE: ThreeModule, count: number, seed: number): THREE.BufferGeometry {
+function buildGeometry(THREE: ThreeModule, count: number): THREE.BufferGeometry {
 	const positions = new Float32Array(count * 3);
 	const colors = new Float32Array(count * 3);
 	const rands = new Float32Array(count);
-	const ts = new Float32Array(count);
-	const rng = makeSeededRng(seed);
 	for (let i = 0; i < count; i++) {
-		const t = (i + 0.5) / count;
-		ts[i] = t;
-		rands[i] = rng();
-		positions[i * 3] = (rng() - 0.5) * 6;
-		positions[i * 3 + 1] = (rng() - 0.5) * 1.2 + 0.3;
-		positions[i * 3 + 2] = 1.0 + rng() * 1.5;
+		positions[i * 3] = (Math.random() - 0.5) * 6;
+		positions[i * 3 + 1] = (Math.random() - 0.5) * 1.2 + 0.3;
+		positions[i * 3 + 2] = 1.0 + Math.random() * 1.5;
 		colors[i * 3] = 0.56;
 		colors[i * 3 + 1] = 0.91;
 		colors[i * 3 + 2] = 1.0;
+		rands[i] = Math.random();
 	}
 	const geo = new THREE.BufferGeometry();
 	geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
 	geo.setAttribute("aColor", new THREE.BufferAttribute(colors, 3));
 	geo.setAttribute("aRand", new THREE.BufferAttribute(rands, 1));
-	geo.setAttribute("aT", new THREE.BufferAttribute(ts, 1));
 	return geo;
 }
 
@@ -163,16 +133,12 @@ export async function createConnectorParticles(
 	const factory = opts.threeFactory ?? DEFAULT_THREE_FACTORY;
 	const THREE = await factory();
 	const pixelScale = opts.pixelScale ?? 1;
-	const geo = buildGeometry(THREE, CONNECTOR_PARTICLE_COUNT, 0);
+	const geo = buildGeometry(THREE, CONNECTOR_PARTICLE_COUNT);
 	const dotTexture = opts.dotTexture ?? createDotTexture(THREE);
 	const ownsDotTexture = !opts.dotTexture && !!dotTexture;
 	const uniforms: UniformsRecord = {
 		uTime: { value: 0 },
-		uEnergy: { value: 0 },
-		uIntensity: { value: 0 },
-		uColorMix: { value: 0 },
 		uPixel: { value: pixelScale },
-		uTrackScale: { value: 1 },
 		uDotTex: { value: dotTexture },
 	};
 	const material = new THREE.ShaderMaterial({
@@ -181,7 +147,6 @@ export async function createConnectorParticles(
 		fragmentShader: CONNECTOR_FRAGMENT_SHADER,
 		transparent: true,
 		depthWrite: false,
-		depthTest: false,
 		blending: THREE.AdditiveBlending,
 	});
 	const points = new THREE.Points(geo, material);
@@ -196,46 +161,38 @@ export async function createConnectorParticles(
 		opts.scene.add(floorMirror);
 	}
 
-	let currentSeed = 0;
-
 	return {
 		object: points,
 		floorMirror,
 		update(ctx) {
 			uniforms.uTime.value = ctx.uniforms.uTime.value;
-			uniforms.uEnergy.value = ctx.snapshot.energy;
 		},
 		setIntensity(value) {
-			uniforms.uIntensity.value = value;
+			void value;
 		},
 		setTrackScale(value) {
-			uniforms.uTrackScale.value = value;
+			void value;
 		},
 		reset(seed) {
-			currentSeed = seed ?? (currentSeed + 1);
-			const rng = makeSeededRng(currentSeed | 0);
+			void seed;
 			const posAttr = geo.attributes.position as unknown as THREE.BufferAttribute;
 			const colorAttr = geo.attributes.aColor as unknown as THREE.BufferAttribute;
 			const randAttr = geo.attributes.aRand as unknown as THREE.BufferAttribute;
-			const tAttr = geo.attributes.aT as unknown as THREE.BufferAttribute;
 			const positions = posAttr.array as Float32Array;
 			const colors = colorAttr.array as Float32Array;
 			const rands = randAttr.array as Float32Array;
-			const ts = tAttr.array as Float32Array;
 			for (let i = 0; i < CONNECTOR_PARTICLE_COUNT; i++) {
-				ts[i] = (i + 0.5) / CONNECTOR_PARTICLE_COUNT + (rng() - 0.5) * 0.02;
-				rands[i] = rng();
-				positions[i * 3] = (rng() - 0.5) * 6;
-				positions[i * 3 + 1] = (rng() - 0.5) * 1.2 + 0.3;
-				positions[i * 3 + 2] = 1.0 + rng() * 1.5;
+				positions[i * 3] = (Math.random() - 0.5) * 6;
+				positions[i * 3 + 1] = (Math.random() - 0.5) * 1.2 + 0.3;
+				positions[i * 3 + 2] = 1.0 + Math.random() * 1.5;
 				colors[i * 3] = 0.56;
 				colors[i * 3 + 1] = 0.91;
 				colors[i * 3 + 2] = 1.0;
+				rands[i] = Math.random();
 			}
 			posAttr.needsUpdate = true;
 			colorAttr.needsUpdate = true;
 			randAttr.needsUpdate = true;
-			tAttr.needsUpdate = true;
 		},
 		dispose() {
 			opts.scene.remove(points);

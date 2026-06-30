@@ -479,6 +479,22 @@ test("HomeVisual applies baseline skull shelf composition target and returns to 
 	expect(skull.scale.x).toBeCloseTo(2.34, 3);
 });
 
+test("HomeVisual routes baseline skull wheel zoom into skull particle scale only for skull preset", async () => {
+	const scene = makeFakeScene();
+	const hv = await createHomeVisual({
+		scene: scene as never,
+		threeFactory: makeFakeThree(),
+		skullAssetData: new Float32Array([0.025, -0.72, 0.62, 1, 42]),
+	} as never);
+	expect((hv as unknown as { applySkullWheel(deltaY: number): boolean }).applySkullWheel(100)).toBe(false);
+	hv.setPreset(SKULL_PRESET_INDEX);
+	expect((hv as unknown as { applySkullWheel(deltaY: number): boolean }).applySkullWheel(100)).toBe(true);
+	hv.update({ ...makeFrameCtx({}, { uTime: { value: 0 } }), dt: 1 } as unknown as FrameContext);
+	const skull = hv.getSkullParticles() as unknown as { scale: { x: number } };
+	expect(skull.scale.x).toBeCloseTo(2.34 * (1 - 0.155 * 0.055), 5);
+	expect((hv as unknown as { getSkullWheelZoom(): number }).getSkullWheelZoom()).toBeCloseTo(0.155, 6);
+});
+
 test("HomeVisual applies baseline wallpaper shelf particle dim to material uniforms", async () => {
 	const scene = makeFakeScene();
 	const hv = await createHomeVisual({ scene: scene as never, threeFactory: makeFakeThree() });

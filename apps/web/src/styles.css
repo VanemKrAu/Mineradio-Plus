@@ -4063,6 +4063,55 @@ body.custom-background-override #album-bg {
   height: 100%;
 }
 
+#idle-guide-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .7s cubic-bezier(.22, 1, .36, 1);
+}
+
+body.idle-guide-on #idle-guide-canvas {
+  opacity: 1 !important;
+}
+
+body.home-wallpaper-preview #idle-guide-canvas {
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+body.idle-guide-interactive #visual-host {
+  cursor: grab;
+}
+
+body.idle-guide-dragging #visual-host {
+  cursor: grabbing;
+}
+
+#login-guide-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 49;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .24s ease;
+}
+
+body.login-guide-active #login-guide-canvas {
+  opacity: 1;
+}
+
+body.render-deep-sleep #idle-guide-canvas,
+body.render-deep-sleep #login-guide-canvas {
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
 #toast {
   position: fixed;
   z-index: 200;

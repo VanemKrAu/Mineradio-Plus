@@ -92,7 +92,7 @@ function makeFakeScene() {
 	};
 }
 
-test("createConnectorParticles builds baseline stage extras with 80 colored random points", async () => {
+test("createConnectorParticles builds baseline stage extras with 80 colored random points and no extra aT track", async () => {
 	const scene = makeFakeScene();
 	const cp = await createConnectorParticles({ scene: scene as never, threeFactory: makeFakeThree() });
 	const geo = (cp.object as unknown as {
@@ -108,9 +108,10 @@ test("createConnectorParticles builds baseline stage extras with 80 colored rand
 	expect(attrs.aColor.count).toBe(80);
 	expect(attrs.aRand.itemSize).toBe(1);
 	expect(attrs.aRand.count).toBe(80);
+	expect(Object.prototype.hasOwnProperty.call(attrs, "aT")).toBe(false);
 });
 
-test("createConnectorParticles adds Points to scene; frustumCulled=false; material additive/transparent/depthTest=false", async () => {
+test("createConnectorParticles adds Points to scene; frustumCulled=false; material matches baseline additive transparent defaults", async () => {
 	const scene = makeFakeScene();
 	const cp = await createConnectorParticles({ scene: scene as never, threeFactory: makeFakeThree() });
 	expect((scene.tracked as unknown[])).toContain(cp.object);
@@ -118,7 +119,8 @@ test("createConnectorParticles adds Points to scene; frustumCulled=false; materi
 	expect(obj.frustumCulled).toBe(false);
 	const mat = (cp.object as unknown as { material: Record<string, unknown> }).material;
 	expect(mat.transparent).toBe(true);
-	expect(mat.depthTest).toBe(false);
+	expect(mat.depthWrite).toBe(false);
+	expect(mat.depthTest).toBeUndefined();
 	expect(mat.blending).toBe(2);
 });
 
@@ -137,14 +139,12 @@ test("uniforms match baseline connector names and expose dot texture", async () 
 	const scene = makeFakeScene();
 	const cp = await createConnectorParticles({ scene: scene as never, threeFactory: makeFakeThree() });
 	const uniforms = (cp.object as unknown as { material: { uniforms: Record<string, { value: unknown }> } }).material.uniforms;
-	const expected = ["uTime", "uEnergy", "uIntensity", "uColorMix", "uPixel", "uTrackScale", "uDotTex"];
+	const expected = ["uTime", "uPixel", "uDotTex"];
 	for (const name of expected) {
 		expect(Object.prototype.hasOwnProperty.call(uniforms, name)).toBe(true);
 	}
 	expect(Object.keys(uniforms).length).toBe(expected.length);
-	expect(uniforms.uTrackScale.value).toBe(1);
 	expect(uniforms.uPixel.value).toBe(1);
-	expect(uniforms.uIntensity.value).toBe(0);
 });
 
 test("createConnectorParticles reuses the baseline shared HomeVisual dot texture without disposing it", async () => {
@@ -161,13 +161,16 @@ test("createConnectorParticles reuses the baseline shared HomeVisual dot texture
 	expect(sharedDotTexture.disposed).toBe(false);
 });
 
-test("fragment shader samples the baseline dot texture and multiplies alpha by uIntensity", async () => {
+test("shaders preserve the baseline connector point size and alpha formula", async () => {
 	const scene = makeFakeScene();
 	const cp = await createConnectorParticles({ scene: scene as never, threeFactory: makeFakeThree() });
-	const shader = (cp.object as unknown as { material: { fragmentShader: string } }).material.fragmentShader;
-	expect(shader).toContain("uniform float uIntensity;");
-	expect(shader).toContain("texture2D(uDotTex, gl_PointCoord)");
-	expect(shader).toContain("* uIntensity");
+	const material = (cp.object as unknown as { material: { vertexShader: string; fragmentShader: string } }).material;
+	expect(material.vertexShader).toContain("gl_PointSize = 4.0 * uPixel;");
+	expect(material.vertexShader).not.toContain("uTrackScale");
+	expect(material.fragmentShader).toContain("uniform sampler2D uDotTex;");
+	expect(material.fragmentShader).toContain("texture2D(uDotTex, gl_PointCoord)");
+	expect(material.fragmentShader).toContain("gl_FragColor = vec4(vC, t.a * vA);");
+	expect(material.fragmentShader).not.toContain("uIntensity");
 });
 
 test("createConnectorParticles adds baseline floor mirror under the stage extras", async () => {
@@ -183,7 +186,7 @@ test("createConnectorParticles adds baseline floor mirror under the stage extras
 	expect(mirror?.material.opacity).toBe(0.55);
 });
 
-test("update(ctx) flows snapshot.energy into uEnergy and reads uTime from ctx.uniforms.uTime.value", async () => {
+test("update(ctx) reads only baseline uTime from ctx.uniforms.uTime.value", async () => {
 	const scene = makeFakeScene();
 	const cp = await createConnectorParticles({ scene: scene as never, threeFactory: makeFakeThree() });
 	const uniforms = (cp.object as unknown as { material: { uniforms: Record<string, { value: number }> } }).material.uniforms;
@@ -205,20 +208,9 @@ test("update(ctx) flows snapshot.energy into uEnergy and reads uTime from ctx.un
 	} as unknown as FrameContext;
 	cp.update(ctx);
 	expect(uniforms.uTime.value).toBe(7.25);
-	expect(uniforms.uEnergy.value).toBe(0.55);
 });
 
-test("setIntensity / setTrackScale mutate uniform state holders", async () => {
-	const scene = makeFakeScene();
-	const cp = await createConnectorParticles({ scene: scene as never, threeFactory: makeFakeThree() });
-	const uniforms = (cp.object as unknown as { material: { uniforms: Record<string, { value: number }> } }).material.uniforms;
-	cp.setIntensity(0.6);
-	expect(uniforms.uIntensity.value).toBe(0.6);
-	cp.setTrackScale(1.4);
-	expect(uniforms.uTrackScale.value).toBe(1.4);
-});
-
-test("reset() rewrites aRand/aT with the given seed", async () => {
+test("reset() rewrites baseline position/aRand buffers without adding non-baseline attributes", async () => {
 	const scene = makeFakeScene();
 	const cp = await createConnectorParticles({ scene: scene as never, threeFactory: makeFakeThree() });
 	const geo = (cp.object as unknown as {
@@ -233,8 +225,9 @@ test("reset() rewrites aRand/aT with the given seed", async () => {
 		if (aRandBefore[i] !== geo.attributes.aRand.array[i]) { anyDiff = true; break; }
 	}
 	expect(anyDiff).toBe(true);
+	expect(geo.attributes.position.needsUpdate).toBe(true);
 	expect(geo.attributes.aRand.needsUpdate).toBe(true);
-	expect(geo.attributes.aT.needsUpdate).toBe(true);
+	expect(Object.prototype.hasOwnProperty.call(geo.attributes, "aT")).toBe(false);
 });
 
 test("dispose removes Points from scene and disposes geometry/material", async () => {

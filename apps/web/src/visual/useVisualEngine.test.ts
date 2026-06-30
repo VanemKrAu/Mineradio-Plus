@@ -1,5 +1,18 @@
 import { expect, test } from "bun:test";
+import { RENDER_STEP_ORDER, RenderStepSlot } from "@mineradio/visual-engine";
 import { createStageLyricsHostSuppliers, createStageLyricsShelfSuppliers, initAudioSource, isRuntimeShelfPreviewActive, lyricPaletteFromHex, readVisualCurrentTimeSeconds, resolveHomeVisualPreset, resolveRuntimeWallpaperSafe, resolveSkullMouthLyricsActive, resolveSkullShelfCompositionActive, resolveStageLyricLayoutOptions, resolveStageLyricPalette, shouldDimWallpaperParticlesForShelf, shouldResetLyricStageCameraView, shouldRetryVisualCoverLoad, setRuntimeShelfMode } from "./useVisualEngine";
+
+test("useVisualEngine wires the dedicated lyric particle render slot between shelf and home visual", async () => {
+	const source = await fetch(new URL("./useVisualEngine.ts", import.meta.url)).then((res) => res.text());
+	const createIndex = source.indexOf("createLyricParticles");
+	expect(createIndex).toBeGreaterThan(0);
+	expect(source).toContain("renderLoop.registerStep(RenderStepSlot.LyricParticles");
+	expect(source).toContain("lyricParticles.update(ctx)");
+	expect(source).toContain("homeVisual.applySkullWheel");
+	expect(source).toContain("homeVisual.getSkullWheelZoom()");
+	expect(RENDER_STEP_ORDER.indexOf(RenderStepSlot.LyricParticles)).toBeGreaterThan(RENDER_STEP_ORDER.indexOf(RenderStepSlot.Shelf));
+	expect(RENDER_STEP_ORDER.indexOf(RenderStepSlot.LyricParticles)).toBeLessThan(RENDER_STEP_ORDER.indexOf(RenderStepSlot.HomeVisual));
+});
 
 test("isRuntimeShelfPreviewActive follows side-auto shelf visibility readiness", () => {
 	expect(isRuntimeShelfPreviewActive("auto", 0.17)).toBe(true);
