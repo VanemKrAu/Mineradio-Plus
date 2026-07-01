@@ -202,20 +202,20 @@ async function loadPodcastFallback(podcast: Pick<PodcastService, "hot">): Promis
 function defaultDiscoverRequester(): DiscoverRequester {
   let modulePromise: Promise<Record<string, (...args: any[]) => Promise<NeteaseResponse>>> | null = null;
   const load = async () => {
-    modulePromise ??= import("NeteaseCloudMusicApi") as unknown as Promise<Record<string, (...args: any[]) => Promise<NeteaseResponse>>>;
+    modulePromise ??= import("hana-music-api") as unknown as Promise<Record<string, (...args: any[]) => Promise<NeteaseResponse>>>;
     return modulePromise;
   };
   const call = (name: string) => async (params: DiscoverRequestParams) => {
     const mod = await load();
     const fn = mod[name];
-    if (!fn) throw new Error(`NeteaseCloudMusicApi missing ${name}`);
+    if (!fn) throw new Error(`hana-music-api missing ${name}`);
     return fn(params);
   };
   return {
     personalized: call("personalized"),
-    djHot: call("dj_hot"),
-    recommendResource: call("recommend_resource"),
-    recommendSongs: call("recommend_songs")
+    djHot: call("djHot"),
+    recommendResource: call("recommendResource"),
+    recommendSongs: call("recommendSongs")
   };
 }
 

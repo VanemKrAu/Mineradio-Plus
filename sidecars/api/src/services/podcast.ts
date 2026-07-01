@@ -346,24 +346,24 @@ async function defaultLoginStatus(): Promise<PodcastLoginInfo> {
 function defaultPodcastRequester(): PodcastRequester {
   let modulePromise: Promise<Record<string, (...args: any[]) => Promise<NeteaseResponse>>> | null = null;
   const load = async () => {
-    modulePromise ??= import("NeteaseCloudMusicApi") as unknown as Promise<Record<string, (...args: any[]) => Promise<NeteaseResponse>>>;
+    modulePromise ??= import("hana-music-api") as unknown as Promise<Record<string, (...args: any[]) => Promise<NeteaseResponse>>>;
     return modulePromise;
   };
   const call = (name: string) => async (params: Record<string, unknown>) => {
     const mod = await load();
     const fn = mod[name];
-    if (!fn) throw new Error(`NeteaseCloudMusicApi missing ${name}`);
+    if (!fn) throw new Error(`hana-music-api missing ${name}`);
     return fn(params);
   };
   return {
     cloudsearch: call("cloudsearch"),
-    djHot: call("dj_hot"),
-    djDetail: call("dj_detail"),
-    djProgram: call("dj_program"),
-    djSublist: call("dj_sublist"),
-    userAudio: call("user_audio"),
-    djPaygift: call("dj_paygift"),
-    recordRecentVoice: call("record_recent_voice")
+    djHot: call("djHot"),
+    djDetail: call("djDetail"),
+    djProgram: call("djProgram"),
+    djSublist: call("djSublist"),
+    userAudio: call("userAudio"),
+    djPaygift: call("djPaygift"),
+    recordRecentVoice: call("recordRecentVoice")
   };
 }
 

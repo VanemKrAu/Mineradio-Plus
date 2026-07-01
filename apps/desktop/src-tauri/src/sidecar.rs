@@ -6,6 +6,8 @@ pub const SIDECAR_LOG_FILE_NAME: &str = "sidecar-runtime.log";
 pub const SIDECAR_BINARY_ENV: &str = "MINERADIO_SIDECAR_BIN";
 pub const BUN_BINARY_ENV: &str = "MINERADIO_BUN_BIN";
 pub const SIDECAR_BINARY_BASENAME: &str = "mineradio-sidecar-api";
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct HealthInfo {
@@ -232,16 +234,35 @@ pub fn find_packaged_sidecar_binary_in_dir(dir: &Path) -> Option<PathBuf> {
                 .unwrap_or(false)
         })
         .collect::<Vec<_>>();
-    matches.sort();
+    matches.sort_by_key(|path| {
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .map(packaged_sidecar_binary_sort_key)
+            .unwrap_or((2, String::new()))
+    });
     matches.into_iter().next()
 }
 
 fn is_packaged_sidecar_binary_name(file_name: &str) -> bool {
     let expected_prefix = format!("{SIDECAR_BINARY_BASENAME}-");
     if cfg!(target_os = "windows") {
-        file_name.starts_with(&expected_prefix) && file_name.ends_with(".exe")
+        file_name == format!("{SIDECAR_BINARY_BASENAME}.exe")
+            || (file_name.starts_with(&expected_prefix) && file_name.ends_with(".exe"))
     } else {
-        file_name.starts_with(&expected_prefix)
+        file_name == SIDECAR_BINARY_BASENAME || file_name.starts_with(&expected_prefix)
+    }
+}
+
+fn packaged_sidecar_binary_sort_key(file_name: &str) -> (u8, String) {
+    let unsuffixed = if cfg!(target_os = "windows") {
+        format!("{SIDECAR_BINARY_BASENAME}.exe")
+    } else {
+        SIDECAR_BINARY_BASENAME.to_string()
+    };
+    if file_name == unsuffixed {
+        (1, file_name.to_string())
+    } else {
+        (0, file_name.to_string())
     }
 }
 
@@ -363,7 +384,24 @@ pub fn build_sidecar_command_from_plan(
     cmd.env("MINERADIO_LOG_DIR", log_dir);
     cmd.env("MINERADIO_APP_VERSION", app_version);
     cmd.env("MINERADIO_SIDECAR_LOG_FILE", sidecar_log_path(log_dir));
+    apply_packaged_sidecar_spawn_options(&mut cmd, plan);
     cmd
+}
+
+#[cfg(windows)]
+fn apply_packaged_sidecar_spawn_options(cmd: &mut std::process::Command, plan: &SidecarLaunchPlan) {
+    if matches!(plan, SidecarLaunchPlan::Bundled(_)) {
+        use std::os::windows::process::CommandExt;
+        // 打包 sidecar 是控制台子系统时，避免安装版启动时弹出独立控制台窗口。
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+}
+
+#[cfg(not(windows))]
+fn apply_packaged_sidecar_spawn_options(
+    _cmd: &mut std::process::Command,
+    _plan: &SidecarLaunchPlan,
+) {
 }
 
 pub fn workspace_root_from_manifest_dir() -> PathBuf {
@@ -767,6 +805,34 @@ mod tests {
         std::fs::write(&sidecar_path, b"sidecar").expect("write fake sidecar");
         std::fs::write(root.join("mineradio-sidecar-api.exe"), b"wrong suffix")
             .expect("write wrong sidecar");
+
+        assert_eq!(
+            find_packaged_sidecar_binary_for_exe(&exe_path),
+            Some(sidecar_path)
+        );
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn find_packaged_sidecar_binary_accepts_installed_unsuffixed_binary() {
+        let root =
+            std::env::temp_dir().join(format!("mineradio-installed-sidecar-test-{}", now_ms()));
+        let exe_path = root.join(if cfg!(target_os = "windows") {
+            "MineRadio-Tauri.exe"
+        } else {
+            "MineRadio-Tauri"
+        });
+        std::fs::create_dir_all(&root).expect("create temp dir");
+        std::fs::write(&exe_path, b"app").expect("write fake exe");
+
+        let sidecar_file_name = if cfg!(target_os = "windows") {
+            "mineradio-sidecar-api.exe"
+        } else {
+            "mineradio-sidecar-api"
+        };
+        let sidecar_path = root.join(sidecar_file_name);
+        std::fs::write(&sidecar_path, b"sidecar").expect("write installed sidecar");
 
         assert_eq!(
             find_packaged_sidecar_binary_for_exe(&exe_path),

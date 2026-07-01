@@ -14,7 +14,9 @@ import {
   songLikeCheck,
   likelist,
   playlistTracks,
-  playlistTrackAdd
+  playlistTrackAdd,
+  vipInfo as hanaVipInfo,
+  vipInfoV2 as hanaVipInfoV2
 } from "hana-music-api";
 import { getProviderCookie } from "../../services/auth-session";
 
@@ -28,41 +30,41 @@ export function getConfig(): NeteaseConfig {
   return {};
 }
 
-type NeteaseCloudMusicApiModule = {
-  vip_info?: (params: Record<string, unknown>) => Promise<{ body: unknown }>;
-  vip_info_v2?: (params: Record<string, unknown>) => Promise<{ body: unknown }>;
+type NeteaseVipInfoModule = {
+  vipInfo?: (params: Record<string, unknown>, config?: { cookie?: string }) => Promise<{ body: unknown }>;
+  vipInfoV2?: (params: Record<string, unknown>, config?: { cookie?: string }) => Promise<{ body: unknown }>;
+  vip_info?: (params: Record<string, unknown>, config?: { cookie?: string }) => Promise<{ body: unknown }>;
+  vip_info_v2?: (params: Record<string, unknown>, config?: { cookie?: string }) => Promise<{ body: unknown }>;
 };
 
 type NeteaseVipInfoCall = {
   key: "vipInfoV2" | "vipInfo";
-  fn: NonNullable<NeteaseCloudMusicApiModule["vip_info"]>;
+  fn: NonNullable<NeteaseVipInfoModule["vipInfo"]>;
 };
 
-let cachedNcmApiModule: NeteaseCloudMusicApiModule | null = null;
+let testVipInfoModule: NeteaseVipInfoModule | null = null;
 
-function getNcmApi(): NeteaseCloudMusicApiModule {
-  if (cachedNcmApiModule === null) {
-    const meta = import.meta as { require?: (id: string) => NeteaseCloudMusicApiModule };
-    if (typeof meta.require !== "function") {
-      throw new Error("NeteaseCloudMusicApi require not available in this runtime");
-    }
-    cachedNcmApiModule = meta.require("NeteaseCloudMusicApi");
-  }
-  return cachedNcmApiModule;
+function getVipInfoModule(): NeteaseVipInfoModule {
+  return testVipInfoModule ?? {
+    vipInfo: hanaVipInfo,
+    vipInfoV2: hanaVipInfoV2
+  };
 }
 
-export function __setNcmApiModuleForTest(module: NeteaseCloudMusicApiModule | null): void {
-  cachedNcmApiModule = module;
+export function __setNcmApiModuleForTest(module: NeteaseVipInfoModule | null): void {
+  testVipInfoModule = module;
 }
 
 async function neteaseVipInfo(
   query: Record<string, unknown>,
   config?: { cookie?: string }
 ): Promise<{ body: unknown }> {
-  const api = getNcmApi();
+  const api = getVipInfoModule();
   const fns: NeteaseVipInfoCall[] = [];
-  if (api.vip_info_v2) fns.push({ key: "vipInfoV2", fn: api.vip_info_v2 });
-  if (api.vip_info) fns.push({ key: "vipInfo", fn: api.vip_info });
+  const vipInfoV2 = api.vipInfoV2 ?? api.vip_info_v2;
+  const vipInfo = api.vipInfo ?? api.vip_info;
+  if (vipInfoV2) fns.push({ key: "vipInfoV2", fn: vipInfoV2 });
+  if (vipInfo) fns.push({ key: "vipInfo", fn: vipInfo });
   if (fns.length === 0) return { body: {} };
   const uid = String(query.uid ?? query.userId ?? "").trim();
   const params = {

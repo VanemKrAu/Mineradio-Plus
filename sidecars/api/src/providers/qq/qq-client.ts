@@ -1,6 +1,6 @@
 // qq-client: thin wrapper around jsososo/qq-music-api (npm `qq-music-api`, GPL-3.0).
-// Lazy dynamic import for CJS interop under Bun. Cookie is applied per-call
-// via setCookie on the singleton instance; never logged outside getConfig().
+// Cookie is applied per-call via setCookie on the singleton instance; never logged outside getConfig().
+import qqMusicApi from "qq-music-api";
 import { getProviderCookie } from "../../services/auth-session";
 
 export interface QqConfig {
@@ -18,23 +18,14 @@ type QqApiModule = {
   setCookie(cookie: string | Record<string, string>): void;
 };
 
-let cachedModule: QqApiModule | null = null;
+let injectedModule: QqApiModule | null = null;
 
 function getQq(): QqApiModule {
-  if (cachedModule === null) {
-    // Bun supports `import.meta.require` for CJS modules from ESM context;
-    // avoids the @types/node `require` global we don't ship.
-    const meta = import.meta as { require?: (id: string) => QqApiModule };
-    if (typeof meta.require !== "function") {
-      throw new Error("qq-music-api require not available in this runtime");
-    }
-    cachedModule = meta.require("qq-music-api");
-  }
-  return cachedModule;
+  return injectedModule ?? qqMusicApi;
 }
 
 export function __setQqApiModuleForTest(module: QqApiModule | null): void {
-  cachedModule = module;
+  injectedModule = module;
 }
 
 export interface QqCall {

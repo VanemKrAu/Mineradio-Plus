@@ -7,10 +7,10 @@ import {
   type ProviderLoginQrKey,
 } from "@mineradio/shared";
 import {
-  login_qr_check,
-  login_qr_create,
-  login_qr_key,
-} from "NeteaseCloudMusicApi";
+  loginQrCheck,
+  loginQrCreate,
+  loginQrKey,
+} from "hana-music-api";
 import { setRuntimeProviderCookie } from "./auth-session";
 
 type NeteaseApiResponse = {
@@ -130,7 +130,7 @@ export function createNeteaseQrLoginService(deps: NeteaseQrLoginDeps): NeteaseQr
 }
 
 export const neteaseQrLogin = createNeteaseQrLoginService({
-  qrKey: login_qr_key as unknown as NeteaseApiCall,
-  qrCreate: login_qr_create as unknown as NeteaseApiCall,
-  qrCheck: login_qr_check as unknown as NeteaseApiCall,
+  qrKey: loginQrKey as unknown as NeteaseApiCall,
+  qrCreate: loginQrCreate as unknown as NeteaseApiCall,
+  qrCheck: loginQrCheck as unknown as NeteaseApiCall,
 });

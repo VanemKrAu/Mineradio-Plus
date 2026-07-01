@@ -48,6 +48,14 @@ declare module "node:os" {
   export function tmpdir(): string;
 }
 
+declare module "qq-music-api" {
+  const qqMusicApi: {
+    api(path: string, query?: Record<string, unknown>): Promise<unknown>;
+    setCookie(cookie: string | Record<string, string>): void;
+  };
+  export default qqMusicApi;
+}
+
 interface ImportMeta {
   main: boolean;
 }
