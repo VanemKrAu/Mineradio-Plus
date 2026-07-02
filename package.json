@@ -67,12 +67,13 @@
         "owner": "VanemKrAu",
         "repo": "Mineradio-Enhanced"
       }
-    ],
-    "mineradio": {
-      "update": {
-        "provider": "github",
-        "owner": "VanemKrAu",
-        "repo": "Mineradio-Enhanced",
+    ]
+  },
+  "mineradio": {
+    "update": {
+      "provider": "github",
+      "owner": "VanemKrAu",
+      "repo": "Mineradio-Enhanced",
       "preview": true,
       "preferMirrors": true,
       "mirrors": [
