@@ -1,4 +1,4 @@
-# Mineradio-Enhanced 🎵
+# Mineradio-Enhanced
 
 > **非官方二改增强版** — 基于 [Mineradio](https://github.com/XxHuberrr/Mineradio)（GPL-3.0）修改，按个人偏好持续调整。
 >
