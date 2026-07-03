@@ -288,7 +288,7 @@ function ensureDesktopShortcut() {
       target,
       cwd: path.dirname(target),
       args: '',
-      description: 'Mineradio desktop music player',
+      description: 'Mineradio+ desktop music player',
       icon: fs.existsSync(APP_ICON_ICO) ? APP_ICON_ICO : target,
       iconIndex: 0,
       appUserModelId: APP_USER_MODEL_ID,
