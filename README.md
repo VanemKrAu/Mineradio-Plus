@@ -19,6 +19,13 @@
 - 快进/快退 10 秒手势支持
 - 无需额外安装任何组件，开箱即用
 
+### 🖼 壁纸库 — 一键换播放器背景
+
+- 自动扫描 Wallpaper Engine 的 workshop 壁纸目录
+- 缩略图网格浏览，**点击即设为播放器背景**
+- 支持自定义壁纸库目录（多文件夹）
+- 启动时自动恢复上次使用的壁纸
+
 ### 其他增强
 
 - 应用名称改为 `Mineradio+`，可与原版共存安装
@@ -55,7 +62,8 @@ npm run build:win
 ## 版权说明
 
 - 本项目基于 [Mineradio](https://github.com/XxHuberrr/Mineradio)（GPL-3.0）修改
-- 修改内容：SMTC 系统媒体控件支持（Media Session API 集成）
+- 修改内容：SMTC 系统媒体控件支持、壁纸库扫描与一键换背景
+- 壁纸库功能参考 [wallpaper_box](https://github.com/SNP-LDN/wallpaper_box)（MIT 授权）
 - 原版作者：[XxHuberrr](https://github.com/XxHuberrr)
 - MR Logo、Mineradio 名称、界面视觉设计与原创视觉表达归原版作者所有
 - 本增强版遵循 **GPL-3.0** 协议开源
@@ -65,12 +73,15 @@ npm run build:win
 
 感谢 [XxHuberrr](https://github.com/XxHuberrr) 创造了 Mineradio 这样一个优秀的开源音乐播放器。
 
+感谢 [SNP-LDN/wallpaper_box](https://github.com/SNP-LDN/wallpaper_box) 提供了本地壁纸库扫描管理的优秀参考实现。
+
 ## 与官方版的区别
 
 | 方面 | 官方版 | 本增强版 |
 |------|--------|----------|
 | 应用名称 | Mineradio | Mineradio+ |
 | SMTC 支持 | ❌ 无 | ✅ 完整支持 |
-| 应用 ID | com.mineradio.desktop | com.mineradio-enhanced.desktop |
+| 壁纸库 | ❌ 无 | ✅ 本地 WE 壁纸管理 |
+| 应用 ID | com.mineradio.desktop | com.mineradio-plus.desktop |
 | 可共存安装 | ❌ | ✅ |
 | 维护者 | XxHuberrr | VanemKrAu |
