@@ -6,7 +6,7 @@
 >
 > 如需原版请访问：[github.com/XxHuberrr/Mineradio](https://github.com/XxHuberrr/Mineradio)
 
-![Mineradio-Enhanced](./build/icon.svg)
+<img src="./build/icon.svg" alt="Mineradio-Enhanced" style="max-width:240px;width:100%;height:auto">
 
 ## ✨ 本版改动（陆续添加中）
 
