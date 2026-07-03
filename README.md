@@ -6,7 +6,7 @@
 >
 > 如需原版请访问：[github.com/XxHuberrr/Mineradio](https://github.com/XxHuberrr/Mineradio)
 
-![Mineradio 暗场启动页](./docs/assets/readme/cinema-beat-smoke.png)
+![Mineradio-Enhanced](./build/icon.svg)
 
 ## ✨ 本版改动（陆续添加中）
 
