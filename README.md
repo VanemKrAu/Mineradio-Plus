@@ -1,4 +1,6 @@
-# Mineradio-Enhanced <img src="./build/icon.svg" alt="logo" style="width:32px;height:32px;vertical-align:middle">
+# Mineradio-Enhanced
+
+<img src="./build/icon.svg" alt="Mineradio-Enhanced" style="max-width:96px;width:100%;height:auto">
 
 > **非官方二改增强版** — 基于 [Mineradio](https://github.com/XxHuberrr/Mineradio)（GPL-3.0）修改，按个人偏好持续调整。
 >
