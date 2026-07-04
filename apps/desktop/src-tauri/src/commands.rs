@@ -1703,6 +1703,54 @@ pub fn login_kugou_close_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+n// === Wallpaper commands ===
+
+#[tauri::command]
+pub fn wallpaper_scan_libraries(
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<Vec<crate::wallpaper::WallpaperEntry>, String> {
+    let folders_str = crate::read_settings(
+        std::path::Path::new(&state.config.app_data_dir),
+    ).get("wallpaperRoots").and_then(|v| v.as_array()).map(|arr| {
+        arr.iter().filter_map(|v| v.as_str().map(std::path::PathBuf::from)).collect::<Vec<_>>()
+    }).unwrap_or_default();
+    if folders_str.is_empty() {
+        return Ok(Vec::new());
+    }
+    Ok(crate::wallpaper::scan_libraries(&folders_str))
+}
+
+#[tauri::command]
+pub fn wallpaper_auto_detect_roots() -> Result<Vec<String>, String> {
+    Ok(crate::wallpaper::auto_detect_roots().into_iter()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect())
+}
+
+#[tauri::command]
+pub fn wallpaper_extract_texture(folder_path: String) -> Result<crate::wallpaper::ExtractTextureResult, String> {
+    let repkg_exe = std::path::Path::new(&folder_path).parent()
+        .and_then(|p| p.parent())
+        .map(|p| p.join("build").join("tools").join("RePKG.exe"))
+        .and_then(|p| if p.exists() { Some(p) } else { None })
+        .unwrap_or_else(|| std::path::PathBuf::from("RePKG.exe"));
+    Ok(crate::wallpaper::extract_wallpaper_texture(&folder_path, &repkg_exe.to_string_lossy()))
+}
+
+#[tauri::command]
+pub fn wallpaper_read_file(path: String) -> Result<String, String> {
+    crate::wallpaper::read_file_as_data_url(&path)
+}
+
+#[tauri::command]
+pub fn wallpaper_clear_cache(state: tauri::State<'_, crate::AppState>) -> Result<usize, String> {
+    let folders_str = crate::read_settings(
+        std::path::Path::new(&state.config.app_data_dir),
+    ).get("wallpaperRoots").and_then(|v| v.as_array()).map(|arr| {
+        arr.iter().filter_map(|v| v.as_str().map(std::path::PathBuf::from)).collect::<Vec<_>>()
+    }).unwrap_or_default();
+    Ok(crate::wallpaper::clear_wallpaper_cache(&folders_str))
+}
 #[tauri::command]
 pub fn desktop_lyrics_set_click_through(
     app: tauri::AppHandle,

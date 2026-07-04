@@ -3,7 +3,7 @@ mod db;
 mod paths;
 mod sidecar;
 mod updater;
-
+mod wallpaper;
 use std::{
     path::PathBuf,
     process::Child,
@@ -409,6 +409,11 @@ pub fn run() {
             commands::login_kugou_close_window,
             commands::get_minimize_to_tray,
             commands::set_minimize_to_tray,
+            commands::wallpaper_scan_libraries,
+            commands::wallpaper_auto_detect_roots,
+            commands::wallpaper_extract_texture,
+            commands::wallpaper_read_file,
+            commands::wallpaper_clear_cache,
         ])
         .setup(move |app| {
             // NOTE: spawn + health-wait are best-effort. This setup closure only
