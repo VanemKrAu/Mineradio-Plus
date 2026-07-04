@@ -88,6 +88,7 @@ import {
 } from "../components/shell/VisualGuideHost";
 import { UpdateHost } from "../components/shell/UpdateHost";
 import { AboutHost } from "../components/shell/AboutHost";
+import { WpPickerHost } from "../components/shell/WpPickerHost";
 import { EmptyHomeHost, type HomeListenRecord, type HomeListenSummary } from "../home/EmptyHomeHost";
 import { SplashHost, type SplashHostProps } from "../visual/SplashHost";
 import {
@@ -281,7 +282,7 @@ interface LoginQrStatusState {
 
 type LoginModalMode = "full" | "add-account" | "single-provider";
 
-const LOGIN_PROVIDERS = ["netease", "qq"] as const satisfies readonly ProviderId[];
+const LOGIN_PROVIDERS = ["netease", "qq", "kugou"] as const satisfies readonly ProviderId[];
 
 const INITIAL_NETEASE_QR_STATUS: LoginQrStatusState = {
   text: "正在生成二维码...",
@@ -293,20 +294,27 @@ const INITIAL_QQ_QR_STATUS: LoginQrStatusState = {
   tone: "idle",
 };
 
+const INITIAL_KUGOU_QR_STATUS: LoginQrStatusState = {
+  text: "正在生成二维码...",
+  tone: "idle",
+};
+
 function initialQrStatusForProvider(provider: ProviderId): LoginQrStatusState {
-  return provider === "qq" ? INITIAL_QQ_QR_STATUS : INITIAL_NETEASE_QR_STATUS;
+  if (provider === "qq") return INITIAL_QQ_QR_STATUS;
+  if (provider === "kugou") return INITIAL_KUGOU_QR_STATUS;
+  return INITIAL_NETEASE_QR_STATUS;
 }
 
 function qrInstructionForProvider(provider: ProviderId): string {
-  return provider === "qq"
-    ? "使用 QQ 音乐 App 扫码，然后在手机上确认登录"
-    : "使用网易云音乐 App 扫码，然后在手机上确认登录";
+  if (provider === "qq") return "使用 QQ 音乐 App 扫码，然后在手机上确认登录";
+  if (provider === "kugou") return "使用酷狗音乐 App 扫码，然后在手机上确认登录";
+  return "使用网易云音乐 App 扫码，然后在手机上确认登录";
 }
 
 function qrScannedTextForProvider(provider: ProviderId): string {
-  return provider === "qq"
-    ? "已扫码，请在 QQ 音乐 App 上确认登录"
-    : "已扫码，请在手机上确认登录";
+  if (provider === "qq") return "已扫码，请在 QQ 音乐 App 上确认登录";
+  if (provider === "kugou") return "已扫码，请在酷狗音乐 App 上确认登录";
+  return "已扫码，请在手机上确认登录";
 }
 
 interface HomeListenHistoryRecord extends HomeListenRecord {
@@ -1001,6 +1009,12 @@ export function App({
   const [neteaseStatus, setNeteaseStatus] =
     useState<ProviderLoginStatus | null>(null);
   const [qqStatus, setQqStatus] = useState<ProviderLoginStatus | null>(null);
+  const [kugouQr, setKugouQr] = useState<LoginQrState | null>(null);
+  const [kugouQrStatus, setKugouQrStatus] = useState<LoginQrStatusState>(
+    INITIAL_KUGOU_QR_STATUS,
+  );
+  const [kugouStatus, setKugouStatus] = useState<ProviderLoginStatus | null>(null);
+  const [wpPickerOpen, setWpPickerOpen] = useState(false);
   const [shelfPlaylists, setShelfPlaylists] = useState<PlaylistSummary[]>([]);
   const [shelfPodcastCollections, setShelfPodcastCollections] = useState<
     PodcastCollection[]
@@ -1628,11 +1642,16 @@ export function App({
 
   const setProviderStatus = useCallback((status: ProviderLoginStatus) => {
     if (status.provider === "netease") setNeteaseStatus(status);
+    else if (status.provider === "kugou") setKugouStatus(status);
     else setQqStatus(status);
   }, []);
 
   const providerLabel = useCallback(
-    (provider: ProviderId) => (provider === "netease" ? "网易云" : "QQ 音乐"),
+    (provider: ProviderId) => {
+      if (provider === "netease") return "网易云";
+      if (provider === "kugou") return "酷狗音乐";
+      return "QQ 音乐";
+    },
     [],
   );
 
@@ -3598,6 +3617,7 @@ export function App({
         onDiy={toggleDiyMode}
         diyActive={diyMode}
         aboutSlot={
+          <>
           <button
             id="about-btn"
             className="icon-btn"
@@ -3608,6 +3628,17 @@ export function App({
           >
             ⓘ
           </button>
+          <button
+            id="wallpaper-picker-btn"
+            className="icon-btn"
+            type="button"
+            onClick={() => setWpPickerOpen(true)}
+            title="壁纸"
+            aria-label="壁纸"
+          >
+            🖼
+          </button>
+          </>
         }
         onMinimize={() => void minimizeWindow()}
         onToggleMaximize={() => void toggleWindowMaximize()}
@@ -4378,6 +4409,10 @@ export function App({
           ×
         </button>
       </div>
+      <WpPickerHost
+        open={wpPickerOpen}
+        onClose={() => setWpPickerOpen(false)}
+      />
       <div
         id="toast"
         className={toast ? "show" : ""}
