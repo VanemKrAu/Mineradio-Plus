@@ -2,7 +2,7 @@
 //!
 //! Reference: Mineradio-Kugou-Modified/server.js + Mineradio-kugou-lite/server.js
 
-import { createHash, randomUUID } from "node:crypto";
+import crypto from "crypto";
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -93,7 +93,11 @@ export interface KugouPlaylistTrack {
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function md5(input: string): string {
-  return createHash("md5").update(input).digest("hex");
+  return crypto.createHash("md5").update(input).digest("hex");
+}
+
+function randomUUID(): string {
+  return crypto.randomUUID();
 }
 
 function sortObjectKeys(obj: Record<string, unknown>): Record<string, unknown> {
@@ -237,7 +241,7 @@ export async function kugouSearch(
     cookie
   );
 
-  const lists = data?.data?.lists || [];
+  const lists = (data?.data?.lists || []) as Record<string, unknown>[];
   return lists.map((item: Record<string, unknown>) => ({
     hash: String(item.EMixSongID || item.Hash || item["320hash"] || ""),
     albumAudioId: String(item.AlbumID || ""),
@@ -320,7 +324,7 @@ export async function kugouUserPlaylists(
     cookie
   );
 
-  const info = data?.data?.info || [];
+  const info = (data?.data?.info || []) as Record<string, unknown>[];
   return info.map((item: Record<string, unknown>) => ({
     id: String(item.listid || item.specialid || ""),
     name: String(item.listname || item.name || ""),
@@ -349,7 +353,7 @@ export async function kugouPlaylistTracks(
     cookie
   );
 
-  const lists = data?.data?.lists || [];
+  const lists = (data?.data?.lists || []) as Record<string, unknown>[];
   return lists.map((item: Record<string, unknown>) => {
     const hashes: Record<string, string> = {};
     for (const q of ["128hash", "320hash", "sqhash", "hrhash", "masterhash"]) {

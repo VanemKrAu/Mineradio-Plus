@@ -1,10 +1,11 @@
 //! Kugou ProviderAdapter — implements ProviderAdapter interface for Kugou music.
 
 import type {
-  ProviderAdapter, ProviderLoginStatus, SongUrlResult,
-  PlaybackQuality, PlaylistSummary, PlaylistDetail, LyricPayload, Track,
-  SongUrlOptions,
+  ProviderAdapter, ProviderLoginStatus, SongUrlResult, SongUrlOptions,
 } from "../provider-adapter";
+import type {
+  PlaybackQuality, PlaylistSummary, PlaylistDetail, LyricPayload, Track,
+} from "@mineradio/shared";
 import { ProviderError, ProviderNotImplementedError } from "../provider-adapter";
 import * as client from "./kugou-client";
 import {
@@ -32,7 +33,7 @@ export function createKugouAdapter(): ProviderAdapter {
     },
 
     async songUrl(track: Track, opts?: SongUrlOptions): Promise<SongUrlResult> {
-      const hash = track.hash || track.id;
+      const hash = track.sourceId || track.id;
       if (!hash) throw new ProviderError(PROVIDER, "MISSING_HASH", "No hash for Kugou track");
 
       const cookie = loadCookie();
@@ -61,6 +62,7 @@ export function createKugouAdapter(): ProviderAdapter {
             playable: true,
             level: quality || "hires",
             quality: quality || "hires",
+            proxied: false,
             br: 999000,
             trial: false,
           };
@@ -69,15 +71,15 @@ export function createKugouAdapter(): ProviderAdapter {
         // silent
       }
 
-      return { url: "", playable: false, trial: true, level: "", quality: "", br: 0, restriction: { category: "geoblocked", message: "No playable URL", action: "none" } };
+      return { url: null, proxied: false, playable: false, trial: false, level: undefined, quality: undefined, br: undefined, restriction: { provider: "kugou", category: "unavailable", message: "No playable URL", action: "" } };
     },
 
     async lyric(track: Track): Promise<LyricPayload> {
-      const hash = track.hash || track.id;
+      const hash = track.sourceId || track.id;
       if (!hash) return mapKugouLyric({ lyric: "" });
 
       try {
-        const result = await client.kugouLyric(hash, track.duration || 0);
+        const result = await client.kugouLyric(hash, (track.durationMs || 0) / 1000);
         return mapKugouLyric(result);
       } catch {
         return mapKugouLyric({ lyric: "" });
@@ -95,11 +97,14 @@ export function createKugouAdapter(): ProviderAdapter {
       const cookie = loadCookie();
       const tracks = await client.kugouPlaylistTracks(id, cookie);
       return {
+        provider: PROVIDER,
         id,
         name: "",
-        cover: "",
+        coverUrl: "",
         trackCount: tracks.length,
         tracks: tracks.map(mapKugouPlaylistTrackToTrack),
+        trackIds: [],
+        subscribed: false,
       };
     },
 
@@ -112,8 +117,8 @@ export function createKugouAdapter(): ProviderAdapter {
         nickname: status.nickname,
         avatarUrl: status.avatarUrl,
         userId: status.userId,
-        vipType: status.vipType,
-        vipLevel: status.vipType > 0 ? "vip" : "none",
+        vipType: status.vipType ?? 0,
+        vipLevel: (status.vipType ?? 0) > 0 ? "vip" : "none",
       };
     },
 

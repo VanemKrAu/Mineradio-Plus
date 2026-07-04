@@ -84,7 +84,8 @@ export function createRouteHandler(deps: RouteHandlerDeps = {}) {
   const podcast = { ...podcastService, ...(deps.podcast ?? {}) };
   const qrLoginByProvider: Record<ProviderId, NeteaseQrLoginService | QqQrLoginService> = {
     netease: deps.neteaseQrLogin ?? neteaseQrLogin,
-    qq: deps.qqQrLogin ?? qqQrLogin
+    qq: deps.qqQrLogin ?? qqQrLogin,
+    kugou: deps.neteaseQrLogin ?? neteaseQrLogin
   };
   const logger = deps.logger ?? createSidecarLogger();
 

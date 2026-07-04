@@ -4,7 +4,7 @@ import { ProviderError } from "../providers/provider-adapter";
 import { providers as defaultProviders, PROVIDER_IDS } from "../providers/registry";
 
 export type CrossSourceResolverDeps = {
-  providers?: Record<ProviderId, ProviderAdapter>;
+  providers?: Partial<Record<ProviderId, ProviderAdapter>>;
   providerOrder?: ProviderId[];
 };
 
