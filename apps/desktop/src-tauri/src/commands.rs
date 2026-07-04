@@ -350,15 +350,17 @@ pub fn wallpaper_set_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(),
     if enabled {
         let win = ensure_wallpaper_window(&app)?;
         win.show().map_err(|e| e.to_string())?;
+        #[cfg(target_os = "windows")]
+        if let Ok(hwnd) = win.hwnd() {
+            let _ = crate::wallpaper::attach_to_workerw(hwnd.0 as isize);
+        }
     } else {
         if let Some(win) = wallpaper_window(&app) {
             win.close().map_err(|e| e.to_string())?;
         }
     }
     Ok(())
-}
-
-#[tauri::command]
+}#[tauri::command]
 pub fn wallpaper_update(app: tauri::AppHandle, state: serde_json::Value) -> Result<(), String> {
     if let Some(win) = wallpaper_window(&app) {
         win.emit("mineradio-wallpaper-state", state)

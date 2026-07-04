@@ -1675,13 +1675,14 @@ export function App({
       const results = await Promise.allSettled([
         client.playlistList("netease"),
         client.playlistList("qq"),
+        client.playlistList("kugou"),
         typeof podcastMy === "function"
           ? podcastMy.call(client)
           : Promise.resolve(null),
       ]);
       setShelfPlaylists(
         results
-          .slice(0, 2)
+          .slice(0, 3)
           .flatMap((result) =>
             result.status === "fulfilled"
               ? (result.value as PlaylistSummary[])
