@@ -1,0 +1,7 @@
+feat: SMTC (System Media Transport Controls) integrated into PlayerController
+
+- Media Session API support for Windows media controls
+- updateMediaMetadata(title/artist/album/artwork)
+- Play/pause/seekforward/seekbackward actions
+- Previous/next track registrable handlers
+- Auto-updates playbackState on play/pause
