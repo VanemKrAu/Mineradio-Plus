@@ -1343,7 +1343,7 @@ pub fn set_minimize_to_tray(
     } else {
         // 移除托盘
         if let Some(tray) = app.tray_by_id("main") {
-            let _ = tray.remove();
+            let _ = tray.set_visible(false).ok();
         }
     }
 
@@ -1779,6 +1779,7 @@ pub fn wallpaper_extract_texture(
     folder_path: String,
 ) -> Result<crate::wallpaper::ExtractTextureResult, String> {
     let repkg_exe = app.path().resource_dir()
+        .ok()
         .map(|d| d.join("build/tools/RePKG.exe"))
         .unwrap_or_else(|| std::path::PathBuf::from("RePKG.exe"));
     Ok(crate::wallpaper::extract_wallpaper_texture(&folder_path, &repkg_exe.to_string_lossy()))

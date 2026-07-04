@@ -156,18 +156,18 @@ pub fn auto_detect_roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
 
     // Common paths for Wallpaper Engine on Windows
-    let candidates = vec![
-        // Steam default library
-        PathBuf::from(
-            r"C:\Program Files (x86)\Steam\steamapps\workshop\content\431960",
-        ),
-        // Alternative Steam library
-        PathBuf::from(r"C:\Program Files\Steam\steamapps\workshop\content\431960"),
-        // User's Documents wallpapers
-        dirs::document_dir().map(|d| d.join("Wallpaper Engine")),
-    ];
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    candidates.push(PathBuf::from(
+        r"C:Program Files (x86)Steamsteamappsworkshopntent431960",
+    ));
+    candidates.push(PathBuf::from(
+        r"C:Program FilesSteamsteamappsworkshopntent431960",
+    ));
+    if let Some(doc) = dirs::document_dir() {
+        candidates.push(doc.join("Wallpaper Engine"));
+    }
 
-    for candidate in candidates.into_iter().flatten() {
+    for candidate in candidates.into_iter() {
         if candidate.exists() {
             roots.push(candidate);
         }
@@ -356,7 +356,6 @@ fn fs_util_dir_size(dir: &Path) -> Option<u64> {
 }
 
 fn base64_encode(bytes: &[u8]) -> String {
-    use std::fmt::Write;
     const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity((bytes.len() + 2) / 3 * 4);
     for chunk in bytes.chunks(3) {
