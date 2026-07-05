@@ -22471,6 +22471,7 @@ function loadImageAsDataUrl(filePath) {
   });
 }
 function applyWallpaper(wp) {
+  console.log('[WP] applyWallpaper called:', wp ? wp.name : 'null');
   if (!wp || !wp.previewPath) return;
   wallpaperPickerData.currentWallpaper = wp.previewPath;
   wallpaperPickerData.currentFolder = wp.folderPath || '';
@@ -22500,7 +22501,7 @@ function applyWallpaper(wp) {
   }
   tryPkg();
   function tryPkg() {
-    // 2a) Try PKG scene extraction (may contain embedded video)
+    console.log('[WP] tryPkg called');
     if (api && typeof api.extractWallpaperScene === "function") {
       showToast("正在解析场景...");
       api.extractWallpaperScene(wp.folderPath).then(function(sceneResult) {
@@ -22520,6 +22521,7 @@ function applyWallpaper(wp) {
     } else { tryPkgTex(); }
   }
   function tryPkgTex() {
+    console.log('[WP] tryPkgTex called');
     // 2b) Fall back to PKG texture (image) extraction
     if (api && typeof api.extractWallpaperTexture === "function") {
       showToast("正在提取纹理...");
