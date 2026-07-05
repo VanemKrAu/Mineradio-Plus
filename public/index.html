@@ -22563,15 +22563,20 @@ window._wallpaperPickerData = wallpaperPickerData;
 window._debugApply = function(name) {
   var wp = wallpaperPickerData.wallpapers.find(function(w) { return w.name === name; });
   if (!wp) {
-    console.log('Wallpaper not found:', name);
-    console.log('Available (first 10):', wallpaperPickerData.wallpapers.slice(0,10).map(function(w){return w.name}));
-    // try partial match
-    var match = wallpaperPickerData.wallpapers.find(function(w) { return w.name.indexOf(name) >= 0; });
-    if (match) { console.log('Partial match:', match.name); wp = match; }
-    else return;
+    wp = wallpaperPickerData.wallpapers.find(function(w) { return w.name.indexOf(name) >= 0; });
   }
+  if (!wp) { console.log('Not found:', name); return; }
   console.log('Applying:', wp.name, wp.folderPath);
   applyWallpaper(wp);
+};
+window._debugFull = async function(name) {
+  var api = window.desktopWindow;
+  var r = await api.autoDetectWallpapers();
+  wallpaperPickerData.roots = r.roots;
+  var s = await api.scanWallpapers(r.roots);
+  wallpaperPickerData.wallpapers = s.wallpapers;
+  console.log('Scanned:', s.wallpapers.length);
+  _debugApply(name || '猫娘');
 };
 function restoreWallpaper() {
   try {
