@@ -4174,6 +4174,10 @@ const server = http.createServer(async (req, res) => {
 
 
   // ---------- 酷狗概念版 ----------
+  if (pn === '/api/kugou-lite/search') {
+    try { sendJSON(res, { songs: await kgLite.handleKugouSearch(url.searchParams.get('keywords')||'', url.searchParams.get('limit')||'12') }); } catch(e) { sendJSON(res, { songs:[] }); }
+    return;
+  }
   if (pn === '/api/kugou/login/status') {
     try { sendJSON(res, await kg.getLoginInfoFresh()); } catch(e) { sendJSON(res, { provider:'kugou', loggedIn:false, error:e.message }, 500); }
     return;
