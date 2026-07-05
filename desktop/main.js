@@ -1096,13 +1096,44 @@ function createWallpaperWindow(payload = {}) {
     wallpaperWindow.showInactive();
     attachWallpaperToWorkerW(wallpaperWindow);
     sendWallpaperState();
+    if (wallpaperSceneFolder) loadWallpaperScene(wallpaperSceneFolder);
   });
-  wallpaperWindow.webContents.once('did-finish-load', sendWallpaperState);
+  wallpaperWindow.webContents.once('did-finish-load', () => {
+    sendWallpaperState();
+    if (wallpaperSceneFolder) loadWallpaperScene(wallpaperSceneFolder);
+  });
   wallpaperWindow.on('closed', () => {
     wallpaperWindow = null;
   });
   wallpaperWindow.loadURL(overlayUrl('wallpaper.html')).catch((e) => console.warn('Wallpaper load failed:', e.message));
   return wallpaperWindow;
+}
+
+let wallpaperSceneFolder = '';
+
+function loadWallpaperScene(folderPath) {
+  if (!folderPath || !wallpaperWindow || wallpaperWindow.isDestroyed()) return;
+  wallpaperSceneFolder = folderPath;
+  try {
+    const scene = wallpaperScanner.extractWallpaperScene(folderPath);
+    if (scene && scene.ok) {
+      // convert paths to file:// URLs
+      if (scene.textures) {
+        for (let i = 0; i < scene.textures.length; i++) {
+          scene.textures[i].url = 'file:///' + scene.textures[i].path.replace(/\\/g, '/');
+        }
+      }
+      if (scene.videos) {
+        for (let i = 0; i < scene.videos.length; i++) {
+          scene.videos[i].url = 'file:///' + scene.videos[i].path.replace(/\\/g, '/');
+        }
+      }
+      wallpaperWindow.webContents.send('mineradio-wallpaper-scene', scene);
+      console.log('[Wallpaper] Scene sent to renderer:', scene.layers ? scene.layers.length : 0, 'layers,', (scene.textures || []).length, 'textures');
+    }
+  } catch (e) {
+    console.warn('[Wallpaper] Scene extraction failed:', e.message);
+  }
 }
 
 function closeWallpaperWindow() {
@@ -1112,6 +1143,7 @@ function closeWallpaperWindow() {
     wallpaperWindow.close();
   }
   wallpaperWindow = null;
+  wallpaperSceneFolder = '';
 }
 
 
@@ -1454,13 +1486,35 @@ ipcMain.handle('mineradio-wallpaper-clear-cache', async () => {
   } catch(e) { return { ok: false, error: e.message }; }
 });
 ipcMain.handle('mineradio-wallpaper-extract-texture', async (_event, folderPath) => {
-  try {
-    var imagePath = wallpaperScanner.extractWallpaperTexture(folderPath);
-    return { ok: true, imagePath: imagePath || '' };
-  } catch (e) {
-    return { ok: false, error: e.message };
-  }
-});
+    try {
+      var imagePath = wallpaperScanner.extractWallpaperTexture(folderPath);
+      return { ok: true, imagePath: imagePath };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
+
+ipcMain.handle('mineradio-wallpaper-extract-scene', async (_event, folderPath) => {
+    try {
+      var scene = wallpaperScanner.extractWallpaperScene(folderPath);
+      // convert absolute paths to file:// URLs for renderer
+      if (scene.ok && scene.textures) {
+        for (var i = 0; i < scene.textures.length; i++) {
+          var t = scene.textures[i];
+          t.url = 'file:///' + t.path.replace(/\\/g, '/');
+        }
+      }
+      if (scene.ok && scene.videos) {
+        for (var j = 0; j < scene.videos.length; j++) {
+          var v = scene.videos[j];
+          v.url = 'file:///' + v.path.replace(/\\/g, '/');
+        }
+      }
+      return scene;
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
 
 ipcMain.handle('mineradio-wallpaper-choose-root', async () => {
   try {
@@ -1484,6 +1538,16 @@ ipcMain.handle('mineradio-wallpaper-set-enabled', async (_event, enabled, payloa
     return { ok: false, error: e.message || 'WALLPAPER_FAILED' };
   }
 });
+
+ipcMain.handle('mineradio-wallpaper-load-scene', async (_event, folderPath) => {
+    try {
+      loadWallpaperScene(folderPath);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
+
 
 ipcMain.handle('mineradio-wallpaper-update', async (_event, payload) => {
   try {
