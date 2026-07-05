@@ -22591,7 +22591,7 @@ function restoreWallpaper() {
   } catch (e) {}
 }
 function setWallpaperBackground(p) {
-  console.log('[BG] setWallpaperBackground called, src:', p);
+  console.trace('[BG] setWallpaperBackground called');
   if (!p) return;
   var url = 'file:///' + String(p).replace(/\\/g, '/');
   var layer = document.getElementById('custom-bg');
