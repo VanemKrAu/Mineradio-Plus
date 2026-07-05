@@ -334,12 +334,13 @@ function publicDownloadUrls(candidates) {
     .filter(Boolean);
 }
 function normalizeVersion(value) {
-  return String(value || '').trim().replace(/^v/i, '').replace(/[+].*$/, '').replace(/-.+$/, '');
+  // "v1.1.1-3" → "1.1.1.3" (preserve build number as 4th segment)
+  return String(value || '').trim().replace(/^v/i, '').replace(/[+].*$/, '').replace(/-/g, '.');
 }
 function compareVersions(a, b) {
   const aa = normalizeVersion(a).split('.').map(n => parseInt(n, 10) || 0);
   const bb = normalizeVersion(b).split('.').map(n => parseInt(n, 10) || 0);
-  const len = Math.max(aa.length, bb.length, 3);
+  const len = Math.max(aa.length, bb.length, 4);
   for (let i = 0; i < len; i++) {
     const left = aa[i] || 0;
     const right = bb[i] || 0;

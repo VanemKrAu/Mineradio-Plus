@@ -22477,7 +22477,7 @@ function applyWallpaper(wp) {
   wallpaperPickerData.currentWallpaper = wp.previewPath;
   wallpaperPickerData.currentFolder = wp.folderPath || '';
   wallpaperPickerData.currentMedia = null;
-  try { localStorage.setItem("mineradio-wallpaper-current", wp.previewPath); } catch (e) {}
+  try { localStorage.setItem("mineradio-wallpaper-current", wp.folderPath); } catch (e) {}
   var cards = document.querySelectorAll("#wp-grid .wp-card");
   cards.forEach(function(c){ c.classList.remove("active"); });
   cards.forEach(function(c){
@@ -22566,27 +22566,30 @@ function restoreWallpaper() {
     var saved = localStorage.getItem("mineradio-wallpaper-current");
     if (!saved) return;
     var api = window.desktopWindow;
-    if (!api || typeof api.readWallpaperFile !== "function") return;
-    api.readWallpaperFile(saved).then(function(res){
-      if (res && res.ok && res.dataUrl) setCustomBackgroundImage(res.dataUrl);
+    if (!api || typeof api.extractWallpaperTexture !== "function") return;
+    api.extractWallpaperTexture(saved).then(function(texResult) {
+      if (!texResult || !texResult.ok || !texResult.imagePath) return;
+      var isVideo = /\.(mp4|webm)$/i.test(texResult.imagePath);
+      api.readWallpaperFile(texResult.imagePath).then(function(res) {
+        if (!res || !res.ok || !res.dataUrl) return;
+        if (isVideo) {
+          setCustomBackgroundMedia({ type: "video", src: res.dataUrl, name: "", mime: "video/mp4" });
+        } else {
+          var bgSrc = res.dataUrl;
+          try {
+            var arr = res.dataUrl.split(',');
+            if (arr.length === 2) {
+              var mime = (arr[0].match(/data:([^;]+)/) || [])[1] || 'image/png';
+              var bin = atob(arr[1]);
+              var bytes = new Uint8Array(bin.length);
+              for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+              bgSrc = URL.createObjectURL(new Blob([bytes], {type: mime}));
+            }
+          } catch(e) {}
+          setCustomBackgroundImage(bgSrc);
+        }
+      }).catch(function(){});
     }).catch(function(){});
-  } catch (e) {}
-}
-function setWallpaperBackground(p) {
-  
-  if (!p) return;
-  var url = 'file:///' + String(p).replace(/\\/g, '/');
-  var layer = document.getElementById('custom-bg');
-  if (layer) {
-    layer.style.setProperty('--custom-bg-image', 'url("' + cssImageUrl(url) + '")');
-    layer.style.setProperty('--custom-bg-image-opacity', '1');
-  }
-  document.body.classList.add('custom-background-override');
-}
-function restoreWallpaper() {
-  try {
-    var saved = localStorage.getItem("mineradio-wallpaper-current");
-    if (saved) setWallpaperBackground(saved);
   } catch (e) {}
 }
 function startHotkeyCapture(action, scope) {

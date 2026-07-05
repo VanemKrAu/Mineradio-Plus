@@ -24,6 +24,7 @@ let htmlFullscreenActive = false;
 let windowFullscreenActive = false;
 let mainWindowStateTimer = null;
 let tray = null;
+let _quitting = false;
 const registeredGlobalHotkeys = new Map();
 
 const WINDOWED_ASPECT = 16 / 9;
@@ -1161,14 +1162,14 @@ function saveSettings(s) {
   try { fs.writeFileSync(f, JSON.stringify(s, null, 2)); } catch(e) {}
 }
 function createTray() {
-  if (tray) return;
+  if (tray || _quitting) return;
   const iconPath = path.join(__dirname, '..', 'build', 'icon.png');
   tray = new Tray(nativeImage.createFromPath(iconPath));
   tray.setToolTip('Mineradio+');
   const contextMenu = Menu.buildFromTemplate([
     { label: '显示窗口', click: () => focusMainWindow() },
     { type: 'separator' },
-    { label: '退出', click: () => { tray = null; app.quit(); } }
+    { label: '退出', click: () => { _quitting = true; app.quit(); } }
   ]);
   tray.setContextMenu(contextMenu);
   tray.on('click', () => focusMainWindow());
@@ -1656,6 +1657,7 @@ async function createWindow() {
   mainWindow.on('move', () => scheduleWindowStateSend(mainWindow));
   mainWindow.on('resize', () => scheduleWindowStateSend(mainWindow));
   mainWindow.on('close', (e) => {
+    if (_quitting) return;
     if (readSettings().minimizeToTray) {
       e.preventDefault();
       mainWindow.hide();
