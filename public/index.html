@@ -22549,6 +22549,7 @@ function applyWallpaper(wp) {
     showToast("该壁纸无 MP4 视频且无可提取纹理，无法应用");
   }
 }
+window._applyWallpaper = applyWallpaper;
 function restoreWallpaper() {
   try {
     var saved = localStorage.getItem("mineradio-wallpaper-current");
