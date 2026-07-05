@@ -20886,6 +20886,7 @@ function applyCustomBackground() {
   document.body.classList.toggle('custom-background-flat', override && !media);
   document.body.classList.toggle('custom-background-video', hasVideo);
   if (layer) {
+    console.log('[BG] applyCustomBackground: image type is data:', (image||'').substring(0,4) === 'data', 'video:', hasVideo, 'override:', override);
     layer.style.setProperty('--custom-bg-image', image ? 'url("' + cssImageUrl(image) + '")' : 'none');
     layer.style.setProperty('--custom-bg-image-opacity', image ? opacity.toFixed(3) : '0');
     layer.style.setProperty('--custom-bg-video-opacity', hasVideo ? opacity.toFixed(3) : '0');
