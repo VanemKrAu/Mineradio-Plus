@@ -24007,9 +24007,10 @@ function updateLoginProviderUi() {
   if (kgSubTabs) kgSubTabs.style.display = isKugou ? 'flex' : 'none';
   if (kgSubStd) kgSubStd.classList.toggle('active', isKugou && kugouSubMode === 'std');
   if (kgSubLite) kgSubLite.classList.toggle('active', isKugou && kugouSubMode === 'lite');
-  if (title) title.textContent = isKugou ? '酷狗概念版登录' : ('扫码登录' + meta.label);
+  var kgLabel = kugouSubMode === 'lite' ? '酷狗概念版' : '酷狗音乐';
+  if (title) title.textContent = isKugou ? (kgLabel + '登录') : ('扫码登录' + meta.label);
   if (desc) desc.innerHTML = isKugou
-    ? '打开 <b>酷狗概念版官方网页登录窗口</b> 扫码，成功后会自动同步账号会话。'
+    ? '打开 <b>' + kgLabel + '官方网页登录窗口</b> 扫码，成功后会自动同步账号会话。'
     : (isQQ
     ? '打开 <b>QQ 音乐官方网页登录窗口</b> 扫码，成功后会自动同步账号会话。'
     : (canOpenNeteaseWeb
@@ -24040,7 +24041,7 @@ function updateLoginProviderUi() {
   if (st) {
     st.className = isKugou ? 'preview' : (isQQ ? 'preview' : '');
     st.textContent = isKugou
-      ? (kugouLoginStatus.loggedIn ? ('已保存酷狗概念版会话 · ' + (kugouLoginStatus.nickname || '')) : '点击按钮打开酷狗概念版官方窗口')
+      ? (kugouLoginStatus.loggedIn ? ('已保存' + kgLabel + '会话 · ' + (kugouLoginStatus.nickname || '')) : '点击按钮打开' + kgLabel + '官方窗口')
       : (isQQ
       ? (qqLoginStatus.loggedIn ? ('已保存 QQ 音乐会话 · ' + (qqLoginStatus.nickname || '')) : '点击“扫码登录”打开 QQ 音乐官方窗口')
       : (canOpenNeteaseWeb ? '点击“网页登录”打开网易云官方窗口' : '正在生成二维码…'));
@@ -24201,7 +24202,7 @@ async function openKugouWebLogin() {
     showToast("桌面环境未就绪，请使用手动导入");
     return;
   }
-  showToast("正在打开酷狗概念版登录窗口...");
+  showToast("正在打开酷狗音乐登录窗口...");
   try {
     var result = await api.openKugouMusicLogin();
     if (!result || !result.ok) throw new Error((result && result.message) || "酷狗登录未完成");
@@ -24482,7 +24483,7 @@ async function logoutActiveAccount() {
     kugouLoginStatus = getKugouLoginDefaults();
     activeAccountProvider = firstLoggedProvider();
     renderUserBtn();
-    showToast('已退出酷狗概念版');
+    showToast('已退出酷狗音乐');
     return;
   }
   doLogout();
