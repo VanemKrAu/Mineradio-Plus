@@ -105,10 +105,33 @@ async function kugouApiRequest(pathname, params, opts) {
 function kugouQrLoginUrl(key) { return KUGOU_QR_PAGE_URL + '?qrcode=' + encodeURIComponent(key) + '&appid=' + KUGOU_WEB_QR_APPID + '&src_appid=' + KUGOU_QR_SRC_APPID; }
 function pickKugouQrKey(body) { if (!body||!body.data) return ''; return String(body.data.qrcode||body.data.qrcode_key||body.data.key||body.data.qrkey||''); }
 
+function buildQrLoginUrl(pathname, params) {
+  var p = Object.assign({}, params);
+  if (!p.signature) p.signature = kugouWebSignature(p);
+  var qs = Object.keys(p).sort().map(function(k){return k+'='+encodeURIComponent(p[k]||'')}).join('&');
+  return KUGOU_LOGIN_BASE_URL + pathname + '?' + qs;
+}
+
+function qrLoginDefaultParams(extra) {
+  var obj = ensureKugouDeviceCookie();
+  var ts = Math.floor(Date.now()/1000);
+  return Object.assign({
+    dfid: '-', mid: 'undefined', uuid: '-',
+    appid: 1001, type: 1, plat: 4,
+    srcappid: KUGOU_QR_SRC_APPID,
+    clienttime: ts,
+    clientver: 20489,
+  }, extra || {});
+}
+
 async function handleKugouQrKey() {
   try {
-    var body = await kugouLoginRequest('/v2/qrcode', {appid:KUGOU_QR_APPID, type:'web', plat:'web'});
-    var key = pickKugouQrKey(body); if (!key) return {ok:false, error:'QR_KEY_FAILED'};
+    var p = qrLoginDefaultParams({ qrcode_txt: 'https://h5.kugou.com/apps/loginQRCode/html/index.html?appid=1005&' });
+    var url = buildQrLoginUrl('/v2/qrcode', p);
+    var reqHeaders = { 'User-Agent': KUGOU_ANDROID_UA, dfid: '-', mid: 'undefined', clienttime: String(p.clienttime), 'kg-rc': '1', 'kg-thash': '5d816a0', 'kg-rec': '1', 'kg-rf': 'B9EDA08A64250DEFFBCADDEE00F8F25F' };
+    var text = await _requestText(url, { headers: reqHeaders });
+    var body = JSON.parse(text);
+    var key = pickKugouQrKey(body); if (!key) return {ok:false, error:'QR_KEY_FAILED', debug: String(text).substring(0,200)};
     var QRCode = require('qrcode'); var qrImage = await QRCode.toDataURL(kugouQrLoginUrl(key));
     return {ok:true, key:key, qrImage:qrImage, qrLoginUrl:kugouQrLoginUrl(key)};
   } catch(e) { return {ok:false, error:e.message}; }
@@ -117,7 +140,11 @@ async function handleKugouQrKey() {
 async function handleKugouQrCheck(key) {
   if (!key) return {ok:false, error:'MISSING_KEY'};
   try {
-    var body = await kugouLoginRequest('/v2/get_userinfo_qrcode', {qrcode:key});
+    var p = qrLoginDefaultParams({ qrcode: key });
+    var url = buildQrLoginUrl('/v2/get_userinfo_qrcode', p);
+    var reqHeaders2 = { 'User-Agent': KUGOU_ANDROID_UA, dfid: '-', mid: 'undefined', clienttime: String(p.clienttime), 'kg-rc': '1', 'kg-thash': '5d816a0', 'kg-rec': '1', 'kg-rf': 'B9EDA08A64250DEFFBCADDEE00F8F25F' };
+    var text = await _requestText(url, { headers: reqHeaders2 });
+    var body = JSON.parse(text);
     if (body && body.data && body.data.status === 4) {
       var nextCookie = Object.assign({}, kugouCookieObject(), body.data);
       kugouCookie = Object.keys(nextCookie).map(function(k){return k+'='+(nextCookie[k]||'')}).join('; ');
