@@ -22550,6 +22550,13 @@ function applyWallpaper(wp) {
   }
 }
 window._applyWallpaper = applyWallpaper;
+window._wallpaperPickerData = wallpaperPickerData;
+window._debugApply = function(name) {
+  var wp = wallpaperPickerData.wallpapers.find(function(w) { return w.name === name; });
+  if (!wp) { console.log('Wallpaper not found:', name); return; }
+  console.log('Applying:', wp.name, wp.folderPath);
+  applyWallpaper(wp);
+};
 function restoreWallpaper() {
   try {
     var saved = localStorage.getItem("mineradio-wallpaper-current");
