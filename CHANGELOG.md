@@ -1,5 +1,18 @@
 # 更新日志
 
+## [1.1.1-4] - 2025-07-06
+
+### 修复
+
+- **壁纸重开后变默认** — `restoreWallpaper` 改为重新提取 `folderPath` 纹理，不再依赖被安全策略拦截的 `file://` 缩略图
+- **托盘退出卡死/重复图标** — 退出时设 `_quitting` 旗标，`close` 事件放过正常关闭，`createTray` 不重建
+- **版本更新检测不工作** — `normalizeVersion` 保留预发布 `-N` 段为第 4 段数字，`compareVersions` 支持四段比较
+
+### 新增
+
+- **WebGL 图层 transform** — shader 增加 per-layer `origin`/`scale` 支持，场景分辨率归一化
+- `qrcode` 添加为直接依赖（之前仅作为 `NeteaseCloudMusicApi` 传递依赖）
+
 ## [1.1.1-3] - 2025-07-06
 
 ### 修复
