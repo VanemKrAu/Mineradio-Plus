@@ -23950,6 +23950,7 @@ async function refreshKugouLoginStatus() {
     } else if (!userPlaylists.some(function(pl){ return pl && pl.provider === 'kugou'; })) {
       refreshUserPlaylists(true);
     }
+    if (kugouLoginStatus.loggedIn && !dualAccountMode) activeAccountProvider = 'kugou';
     if (!hasPlatformLogin(activeAccountProvider)) activeAccountProvider = firstLoggedProvider();
     renderUserBtn();
     return kugouLoginStatus;
@@ -24242,6 +24243,8 @@ async function openKugouWebLogin() {
     if (!info || !info.ok) throw new Error((info && info.message) || "酷狗 cookie 无效");
     kugouLoginStatus = info.loginInfo || getKugouLoginDefaults();
     qqManualCookieOpen = false;
+    activeAccountProvider = 'kugou';
+    dualAccountMode = false;
     renderUserBtn();
     refreshUserPlaylists(true);
     showToast("酷狗已登录: " + (kugouLoginStatus.nickname || ""));
@@ -24275,6 +24278,8 @@ async function openKugouLiteWebLogin() {
           stopQrPoll();
           kugouLoginStatus = chk.loginInfo || await apiJson('/api/kugou-lite/login/status');
           if (qrStatus) qrStatus.textContent = '酷狗概念版已登录';
+          activeAccountProvider = 'kugou';
+          dualAccountMode = false;
           renderUserBtn(); refreshUserPlaylists(true);
           showToast('酷狗概念版已登录');
           setTimeout(closeLoginModal, 500);
