@@ -192,23 +192,23 @@ function extractPkgToCache(folderPath) {
 
   try {
     var { execFileSync } = require('child_process');
-    execFileSync(REPKG_EXE, ['extract', '-o', cacheDir, pkgFile], {
+    execFileSync(REPKG_EXE, ['extract', '-s', '-o', cacheDir, pkgFile], {
       encoding: 'utf8', stdio: 'pipe', timeout: 60000
     });
     fs.writeFileSync(cacheMarker, Date.now().toString());
     return cacheDir;
   } catch (e) {
-    console.warn('[RePKG] extract failed for', folderPath, ':', e.message);
-    // try legacy single-dir fallback
+    console.warn('[RePKG] simple extract failed for', folderPath, ':', e.message);
+    // try organized fallback
     try {
       var { execFileSync } = require('child_process');
-      execFileSync(REPKG_EXE, ['extract', '-s', '-o', cacheDir, pkgFile], {
+      execFileSync(REPKG_EXE, ['extract', '-o', cacheDir, pkgFile], {
         encoding: 'utf8', stdio: 'pipe', timeout: 60000
       });
       fs.writeFileSync(cacheMarker, Date.now().toString());
       return cacheDir;
     } catch (e2) {
-      console.warn('[RePKG] legacy extract also failed:', e2.message);
+      console.warn('[RePKG] organized extract also failed:', e2.message);
       return '';
     }
   }
@@ -251,84 +251,150 @@ function parseSceneJson(scenePath, cacheDir) {
   }
 
   var layers = [];
-  var rawLayers = scene.layers || [];
 
   function resolveFilePath(rawPath) {
-    // scene.json paths like "materials/bg.tex" → after RePKG → "materials/bg.png"
     var ext = path.extname(rawPath).toLowerCase();
-    if (ext === '.tex') {
-      return rawPath.replace(/\.tex$/i, '.png');
-    }
+    if (ext === '.tex') return rawPath.replace(/\.tex$/i, '.png');
     return rawPath;
   }
 
-  function processLayer(layer) {
-    var type = (layer.type || 'image').toLowerCase();
-
-    // composition layers act as containers
-    if (type === 'composition' && Array.isArray(layer.layers)) {
-      for (var k = 0; k < layer.layers.length; k++) {
-        processLayer(layer.layers[k]);
+  /** Resolve model JSON -> texture PNG (via material JSON or name fallback) */
+  function resolveObjectTexture(modelPath) {
+    try {
+      // In -s flat mode, 'models/foo.json' becomes just 'foo.json'
+      var modelFull = path.join(cacheDir, modelPath);
+      if (!fs.existsSync(modelFull)) {
+        // try basename (flat extract)
+        var modelFlat = path.join(cacheDir, path.basename(modelPath));
+        if (!fs.existsSync(modelFlat)) return '';
+        modelFull = modelFlat;
       }
-      return;
-    }
+      var model = JSON.parse(fs.readFileSync(modelFull, 'utf8'));
 
-    // skip non-visual layers
-    if (type === 'camera' || type === 'sound') return;
+      if (model.material) {
+        var matFull = path.join(cacheDir, model.material);
+        if (!fs.existsSync(matFull)) {
+          // try basename (flat extract)
+          var matFlat = path.join(cacheDir, path.basename(model.material));
+          if (fs.existsSync(matFlat)) matFull = matFlat;
+        }
+        if (fs.existsSync(matFull)) {
+          try {
+            var mat = JSON.parse(fs.readFileSync(matFull, 'utf8'));
+            if (Array.isArray(mat.passes) && mat.passes.length) {
+              var texNames = mat.passes[0].textures;
+              if (Array.isArray(texNames)) {
+                for (var ti = 0; ti < texNames.length; ti++) {
+                  var tName = texNames[ti]; if (!tName) continue;
+                  var exts = ['.png', '.jpg', '.jpeg'];
+                  for (var ei = 0; ei < exts.length; ei++) {
+                    var cand = path.join(cacheDir, tName + exts[ei]);
+                    if (fs.existsSync(cand)) return path.relative(cacheDir, cand).replace(/\\/g, '/');
+                  }
+                }
+              }
+            }
+          } catch (_) {}
+        }
 
-    if (layer.visible === false) return;
-
-    var entry = {
-      name: layer.name || '',
-      type: type,
-      visible: layer.visible !== false,
-      opacity: typeof layer.opacity === 'number' ? Math.min(1, Math.max(0, layer.opacity)) : 1,
-      blending: layer.blending || 'opaque',
-      origin: Array.isArray(layer.origin) ? layer.origin.slice(0, 2) : [0.5, 0.5],
-      scale: Array.isArray(layer.scale) ? layer.scale.slice(0, 2) : [1, 1],
-      angles: Array.isArray(layer.angles) ? layer.angles.slice(0, 3) : [0, 0, 0],
-      tint: Array.isArray(layer.tint) ? layer.tint.slice(0, 3) : [1, 1, 1],
-      effects: Array.isArray(layer.effects) ? layer.effects : [],
-    };
-
-    // resolve file path
-    if (layer.file) {
-      var resolved = resolveFilePath(layer.file);
-      var fullPath = path.join(cacheDir, resolved);
-      if (fs.existsSync(fullPath)) {
-        entry.imageFile = resolved;
-      }
-    }
-
-    // video layer support
-    if (type === 'fullscreen' && layer.file && /\.mp4$/i.test(layer.file)) {
-      var videoPath = path.join(cacheDir, layer.file);
-      if (fs.existsSync(videoPath)) {
-        entry.videoFile = layer.file;
-      }
-    }
-
-    // textures array (for effect/sprite layers)
-    if (Array.isArray(layer.textures)) {
-      entry.textures = [];
-      for (var t = 0; t < layer.textures.length; t++) {
-        var texResolved = resolveFilePath(layer.textures[t]);
-        if (fs.existsSync(path.join(cacheDir, texResolved))) {
-          entry.textures.push(texResolved);
+        // fallback: derive texture name from material ref path (e.g. "materials/foo.json" -> "foo.png")
+        var baseName = path.basename(model.material, '.json');
+        if (baseName) {
+          var exts = ['.png', '.jpg', '.jpeg'];
+          for (var ei = 0; ei < exts.length; ei++) {
+            var cand = path.join(cacheDir, baseName + exts[ei]);
+            if (fs.existsSync(cand)) return path.relative(cacheDir, cand).replace(/\\/g, '/');
+          }
         }
       }
-    }
 
-    // particle system
-    if (type === 'particle') {
-      entry.particleSystem = layer.particleSystem || null;
-    }
-
-    layers.push(entry);
+      // fallback: derive from model JSON file name
+      var modelBase = path.basename(modelPath, '.json');
+      if (modelBase) {
+        var exts = ['.png', '.jpg', '.jpeg'];
+        for (var ei = 0; ei < exts.length; ei++) {
+          var cand = path.join(cacheDir, modelBase + exts[ei]);
+          if (fs.existsSync(cand)) return path.relative(cacheDir, cand).replace(/\\/g, '/');
+        }
+      }
+    } catch (_) {}
+    return '';
   }
 
-  for (var i = 0; i < rawLayers.length; i++) {
-    processLayer(rawLayers[i]);
+  function parseVec3(v) {
+    if (Array.isArray(v)) return v.map(Number);
+    if (typeof v === 'string') return v.trim().split(/\s+/).map(Number);
+    return [0, 0, 0];
+  }
+
+  // 2D scene: scene.layers
+  if (Array.isArray(scene.layers)) {
+    function processLayer(layer) {
+      var type = (layer.type || 'image').toLowerCase();
+      if (type === 'composition' && Array.isArray(layer.layers)) {
+        for (var k = 0; k < layer.layers.length; k++) processLayer(layer.layers[k]);
+        return;
+      }
+      if (type === 'camera' || type === 'sound') return;
+      if (layer.visible === false) return;
+
+      var entry = {
+        name: layer.name || '', type: type,
+        visible: layer.visible !== false,
+        opacity: typeof layer.opacity === 'number' ? Math.min(1, Math.max(0, layer.opacity)) : 1,
+        blending: layer.blending || 'opaque',
+        origin: Array.isArray(layer.origin) ? layer.origin.slice(0, 2).map(Number) : [0.5, 0.5],
+        scale: Array.isArray(layer.scale) ? layer.scale.slice(0, 2).map(Number) : [1, 1],
+        angles: Array.isArray(layer.angles) ? layer.angles.slice(0, 3).map(Number) : [0, 0, 0],
+        tint: Array.isArray(layer.tint) ? layer.tint.slice(0, 3).map(Number) : [1, 1, 1],
+        effects: Array.isArray(layer.effects) ? layer.effects : [],
+      };
+
+      if (layer.file) {
+        var resolved = resolveFilePath(layer.file);
+        if (fs.existsSync(path.join(cacheDir, resolved))) entry.imageFile = resolved;
+      }
+      if (type === 'fullscreen' && layer.file && /\.mp4$/i.test(layer.file)) {
+        if (fs.existsSync(path.join(cacheDir, layer.file))) entry.videoFile = layer.file;
+      }
+      if (Array.isArray(layer.textures)) {
+        entry.textures = [];
+        for (var t = 0; t < layer.textures.length; t++) {
+          var tr = resolveFilePath(layer.textures[t]);
+          if (fs.existsSync(path.join(cacheDir, tr))) entry.textures.push(tr);
+        }
+      }
+      if (type === 'particle') entry.particleSystem = layer.particleSystem || null;
+      layers.push(entry);
+    }
+    for (var i = 0; i < scene.layers.length; i++) processLayer(scene.layers[i]);
+  }
+
+  // 3D scene: scene.objects
+  if (Array.isArray(scene.objects)) {
+    var BLEND = { 0: 'opaque', 1: 'additive', 2: 'multiply', 3: 'screen', 4: 'overlay' };
+    for (var oi = 0; oi < scene.objects.length; oi++) {
+      var obj = scene.objects[oi];
+      if (!obj.image) continue;
+      if (obj.visible === false) continue;
+
+      var texFile = resolveObjectTexture(obj.image);
+      var origin = parseVec3(obj.origin);
+      var scale = parseVec3(obj.scale);
+      var angles = parseVec3(obj.angles);
+
+      layers.push({
+        name: obj.name || '', type: 'image', visible: true, opacity: 1,
+        blending: BLEND[obj.colorBlendMode] || 'opaque',
+        copybackground: !!obj.copybackground,
+        origin: origin.length >= 2 ? [origin[0], origin[1]] : [0.5, 0.5],
+        scale: scale.length >= 2 ? [scale[0], scale[1]] : [1, 1],
+        angles: angles.length >= 3 ? angles : [0, 0, 0],
+        tint: [1, 1, 1],
+        effects: Array.isArray(obj.effects) ? obj.effects : [],
+        imageFile: texFile || '',
+      });
+    }
   }
 
   return layers;
@@ -429,6 +495,12 @@ function extractWallpaperScene(folderPath) {
 function extractWallpaperTexture(folderPath) {
   var scene = extractWallpaperScene(folderPath);
   if (!scene.ok) return '';
+
+  // 优先返回视频文件（PKG 内嵌 MP4）
+  if (scene.videos && scene.videos.length > 0) {
+    console.log('[Wallpaper] extractWallpaperTexture: found video, returning:', scene.videos[0].path);
+    return scene.videos[0].path;
+  }
 
   // find largest texture as the "main" image
   var bestPath = '';

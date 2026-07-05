@@ -22215,7 +22215,7 @@ function closeAboutModal() {
   var modal = document.getElementById('about-modal');
   if (modal) modal.classList.remove('show');
 }
-var wallpaperPickerData = { roots: [], wallpapers: [], currentWallpaper: '' };
+var wallpaperPickerData = { roots: [], wallpapers: [], currentWallpaper: '', currentFolder: '', currentMedia: null };
 var wpRatingFilter = 'all';
 var wpSearchText = '';
 function onWallpaperSearch() {
@@ -22466,6 +22466,8 @@ function loadImageAsDataUrl(filePath) {
 function applyWallpaper(wp) {
   if (!wp || !wp.previewPath) return;
   wallpaperPickerData.currentWallpaper = wp.previewPath;
+  wallpaperPickerData.currentFolder = wp.folderPath || '';
+  wallpaperPickerData.currentMedia = null;
   try { localStorage.setItem("mineradio-wallpaper-current", wp.previewPath); } catch (e) {}
   var cards = document.querySelectorAll("#wp-grid .wp-card");
   cards.forEach(function(c){ c.classList.remove("active"); });
@@ -22475,11 +22477,14 @@ function applyWallpaper(wp) {
   closeWallpaperPicker();
   var api = window.desktopWindow;
   if (!api || typeof api.readWallpaperFile !== "function") { showToast("API 不可用"); return; }
-  // 1) Try MP4 video first
-  if (wp.mp4File) {
+  // 1) Try MP4 video first (wp.mp4Files is an array of filenames)
+  var mp4List = wp.mp4Files || [];
+  if (mp4List.length > 0) {
+    var mp4FullPath = wp.folderPath.replace(/\//g, '\\') + '\\' + mp4List[0];
     showToast("正在加载视频壁纸...");
-    api.readWallpaperFile(wp.mp4File).then(function(res){
+    api.readWallpaperFile(mp4FullPath).then(function(res){
       if (res && res.ok && res.dataUrl) {
+        wallpaperPickerData.currentMedia = { type: "video", src: res.dataUrl, name: wp.name, mime: "video/mp4", folder: wp.folderPath };
         setCustomBackgroundMedia({ type: "video", src: res.dataUrl, name: wp.name, mime: "video/mp4" });
         showToast("壁纸已应用（视频）：" + wp.name);
       } else { tryPkg(); }
@@ -22488,17 +22493,45 @@ function applyWallpaper(wp) {
   }
   tryPkg();
   function tryPkg() {
-    // 2) Try PKG texture extraction
+    // 2a) Try PKG scene extraction (may contain embedded video)
+    if (api && typeof api.extractWallpaperScene === "function") {
+      showToast("正在解析场景...");
+      api.extractWallpaperScene(wp.folderPath).then(function(sceneResult) {
+        if (sceneResult && sceneResult.ok && sceneResult.videos && sceneResult.videos.length > 0) {
+          // Found PKG-embedded video
+          var vidPath = sceneResult.videos[0].path;
+          console.log('[Wallpaper] PKG video found:', vidPath);
+          api.readWallpaperFile(vidPath).then(function(vidRes) {
+            if (vidRes && vidRes.ok && vidRes.dataUrl) {
+              wallpaperPickerData.currentMedia = { type: "video", src: vidRes.dataUrl, name: wp.name, mime: "video/mp4", folder: wp.folderPath };
+              setCustomBackgroundMedia({ type: "video", src: vidRes.dataUrl, name: wp.name, mime: "video/mp4" });
+              showToast("壁纸已应用（PKG视频）：" + wp.name);
+            } else { tryPkgTex(); }
+          }).catch(function(){ tryPkgTex(); });
+        } else { tryPkgTex(); }
+      }).catch(function(){ tryPkgTex(); });
+    } else { tryPkgTex(); }
+  }
+  function tryPkgTex() {
+    // 2b) Fall back to PKG texture (image) extraction
     if (api && typeof api.extractWallpaperTexture === "function") {
-      showToast("正在提取高清纹理...");
+      showToast("正在提取纹理...");
       api.extractWallpaperTexture(wp.folderPath).then(function(texResult){
         if (texResult && texResult.ok && texResult.imagePath) {
-          api.readWallpaperFile(texResult.imagePath).then(function(imgRes){
-            if (imgRes && imgRes.ok && imgRes.dataUrl) {
-              setCustomBackgroundImage(imgRes.dataUrl);
-              showToast("壁纸已应用（高清纹理）：" + wp.name);
-            } else { showToast("纹理读取失败"); }
-          }).catch(function(){ showToast("纹理加载失败"); });
+          var isVideo = /\.(mp4|webm)$/i.test(texResult.imagePath);
+          api.readWallpaperFile(texResult.imagePath).then(function(res){
+            if (res && res.ok && res.dataUrl) {
+              if (isVideo) {
+                wallpaperPickerData.currentMedia = { type: "video", src: res.dataUrl, name: wp.name, mime: "video/mp4", folder: wp.folderPath };
+                setCustomBackgroundMedia({ type: "video", src: res.dataUrl, name: wp.name, mime: "video/mp4" });
+                showToast("壁纸已应用（视频）：" + wp.name);
+              } else {
+                wallpaperPickerData.currentMedia = { type: "image", src: res.dataUrl, name: wp.name, folder: wp.folderPath };
+                setCustomBackgroundImage(res.dataUrl);
+                showToast("壁纸已应用（纹理）：" + wp.name);
+              }
+            } else { showToast("读取失败"); }
+          }).catch(function(){ showToast("加载失败"); });
         } else { noSource(); }
       }).catch(function(){ noSource(); });
     } else { noSource(); }
@@ -26921,6 +26954,7 @@ function desktopLyricsPayload(forceBeatMap) {
 }
 function wallpaperPayload() {
   var meta = currentDesktopSongMeta();
+  var wm = wallpaperPickerData.currentMedia;
   return {
     enabled: !!fx.wallpaperMode && !isDevelopmentLockedFx('wallpaperMode'),
     title: meta.title,
@@ -26929,7 +26963,9 @@ function wallpaperPayload() {
     playing: !!playing,
     preset: fx.preset,
     opacity: clampRange(fx.wallpaperOpacity == null ? fxDefaults.wallpaperOpacity : Number(fx.wallpaperOpacity), 0.35, 1),
-    colors: desktopOverlayColors()
+    colors: desktopOverlayColors(),
+    media: wm || null,
+    folderPath: wallpaperPickerData.currentFolder || ''
   };
 }
 function pushDesktopLyricsState(force) {

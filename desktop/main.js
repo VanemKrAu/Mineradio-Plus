@@ -1066,6 +1066,7 @@ function createWallpaperWindow(payload = {}) {
   if (wallpaperWindow && !wallpaperWindow.isDestroyed()) {
     positionWallpaperWindow();
     sendWallpaperState();
+    if (wallpaperSceneFolder) loadWallpaperScene(wallpaperSceneFolder);
     return wallpaperWindow;
   }
   const bounds = screen.getPrimaryDisplay().bounds;
@@ -1460,7 +1461,7 @@ ipcMain.handle('mineradio-wallpaper-read-file', async (_event, filePath) => {
     console.log('[WallpaperReadFile] request:', filePath);
     if (!filePath || typeof filePath !== 'string') return { ok: false, error: 'INVALID_PATH' };
     var ext = path.extname(filePath).toLowerCase();
-    var mime = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp' }[ext] || 'image/jpeg';
+    var mime = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.gif': 'image/gif', '.webp': 'image/webp', '.mp4': 'video/mp4', '.webm': 'video/webm' }[ext] || 'image/jpeg';
     var buf = fs.readFileSync(filePath);
     return { ok: true, dataUrl: 'data:' + mime + ';base64,' + buf.toString('base64') };
   } catch (e) {
@@ -1531,7 +1532,11 @@ ipcMain.handle('mineradio-wallpaper-choose-root', async () => {
 
 ipcMain.handle('mineradio-wallpaper-set-enabled', async (_event, enabled, payload) => {
   try {
-    if (enabled) createWallpaperWindow(payload || {});
+    if (enabled) {
+      var p = payload || {};
+      if (p.folderPath) wallpaperSceneFolder = p.folderPath;
+      createWallpaperWindow(p);
+    }
     else closeWallpaperWindow();
     return { ok: true };
   } catch (e) {
@@ -1552,6 +1557,7 @@ ipcMain.handle('mineradio-wallpaper-load-scene', async (_event, folderPath) => {
 ipcMain.handle('mineradio-wallpaper-update', async (_event, payload) => {
   try {
     wallpaperState = { ...wallpaperState, ...(payload || {}) };
+    if (payload && payload.folderPath) wallpaperSceneFolder = payload.folderPath;
     if (wallpaperState.enabled) {
       createWallpaperWindow(wallpaperState);
       if (wallpaperWindow && !wallpaperWindow.isDestroyed()) {

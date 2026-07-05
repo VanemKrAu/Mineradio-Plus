@@ -12,8 +12,8 @@
 </head>
 <body>
   <canvas id="gl"></canvas>
-  <canvas id="overlay"></canvas>
   <video id="bgv" loop muted playsinline></video>
+  <canvas id="overlay"></canvas>
   <script>
     'use strict';
     // ═══════════════════════════════════════════
@@ -153,17 +153,34 @@
       }
       await Promise.all(promises);
 
-      // Handle video layers
-      for (var k = 0; k < sceneLayers.length; k++) {
-        if (sceneLayers[k].videoFile && scene.videos) {
-          for (var v = 0; v < scene.videos.length; v++) {
-            if (scene.videos[v].name === sceneLayers[k].videoFile) {
-              bgVideo.src = scene.videos[v].url;
-              bgVideo.style.display = 'block';
-              bgVideo.play().catch(function() {});
-              break;
+      // ── Video priority: if scene has video files, use them directly ──
+      var hasVideo = false;
+      if ((scene.videos || []).length > 0) {
+        bgVideo.src = scene.videos[0].url;
+        bgVideo.style.display = 'block';
+        bgVideo.play().catch(function() {});
+        glCanvas.style.display = 'none';
+        hasVideo = true;
+        console.log('[WP] Video mode:', scene.videos[0].url);
+      }
+
+      // Handle video from layers (fallback)
+      if (!hasVideo) {
+        for (var k = 0; k < sceneLayers.length; k++) {
+          if (sceneLayers[k].videoFile && scene.videos) {
+            for (var v = 0; v < scene.videos.length; v++) {
+              if (scene.videos[v].name === sceneLayers[k].videoFile) {
+                bgVideo.src = scene.videos[v].url;
+                bgVideo.style.display = 'block';
+                bgVideo.play().catch(function() {});
+                glCanvas.style.display = 'none';
+                hasVideo = true;
+                console.log('[WP] Video from layer:', sceneLayers[k].name);
+                break;
+              }
             }
           }
+          if (hasVideo) break;
         }
       }
 

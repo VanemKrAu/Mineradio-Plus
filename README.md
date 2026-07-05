@@ -12,6 +12,14 @@
 
 ## ✨ 本版改动（陆续添加中）
 
+### 🎬 PKG 场景渲染 — 原生壁纸引擎渲染
+
+- **视频优先**：检测到 PKG 内嵌 `.mp4`/`.webm` 或旁路 MP4 时自动播放视频背景
+- **WebGL 多层渲染**：解析 Wallpaper Engine `scene.json`（objects + layers），逐层绘制原版场景
+- **5 种混合模式**：opaque / additive / translucent / multiply / screen
+- **RePKG 纹理提取**：自动解包 `scene.pkg` 获取高清纹理 + 视频文件
+- 兼容 Steam Workshop 821 个壁纸（533 个场景 + 288 个视频）
+
 ### 🎛 SMTC 系统媒体控件支持
 
 - 集成 **Media Session API**，与 Windows 10/11 系统媒体控件（SMTC）深度对接
