@@ -4193,6 +4193,7 @@ const server = http.createServer(async (req, res) => {
       const body = await readRequestBody(req);
       const raw = body.cookie||body.data||body.text||'';
       const c = kg.normalizeCookie(raw);
+      console.log('[KugouLogin] raw cookie length:', (raw||'').length, 'normalized:', c ? c.substring(0,100) : 'EMPTY');
       if (!c) { sendJSON(res, { ok:false, error:'EMPTY_COOKIE' }, 400); return; }
       // Append nickname/avatar from DOM extraction if provided
       if (body.nickname) c = c + '; nickname=' + body.nickname;

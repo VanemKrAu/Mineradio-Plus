@@ -120,6 +120,7 @@ function getKugouLoginInfo() {
   const userId = kugouCookieUserId(obj);
   const token = kugouCookieToken(obj);
   const loggedIn = !!(userId && token);
+  console.log('[Kugou] getLoginInfo: userId=' + userId + ' token=' + (token ? 'PRESENT' : 'MISSING') + ' loggedIn=' + loggedIn + ' cookieKeys=' + Object.keys(obj).slice(0,10).join(','));
   const vipType = loggedIn ? kugouCookieVipType(obj) : 0;
   return {
     provider: 'kugou', loggedIn, preview: true,
