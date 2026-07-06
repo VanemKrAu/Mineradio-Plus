@@ -17779,6 +17779,7 @@ function renderSongSearchResults(songs) {
       '<button class="add-btn" title="下一首播放" onclick="event.stopPropagation();queueSearchResult(' + i + ')">+</button>' +
     '</div>';
   }).join('');
+  $results.style.display = 'block';
   $results.classList.add('show');
   syncLikeStatusForSongs(playlist);
   if (window.gsap) animateListItems($results, '.search-result', { x: 0, y: 6, stagger: 0.012, duration: 0.18, limit: 18 });
