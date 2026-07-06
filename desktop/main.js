@@ -94,7 +94,7 @@ const NETEASE_LOGIN_COOKIE_PRIORITY = [
   'WNMCID',
   'JSESSIONID-WYYY',
 ];
-const KUGOU_LOGIN_COOKIE_PRIORITY = ['KuGoo','kg_mid','kg_dfid','KugooID','userid','token','t'];
+const KUGOU_LOGIN_COOKIE_PRIORITY = ['KuGoo','kg_mid','kg_dfid','KugooID','userid','token','t','nickname','avatar','user_name','head_img','img','m_name','pic'];
 const KUGOU_LOGIN_COOKIE_DOMAINS = ['kugou.com','kgimg.com'];
 
 function findOpenPort(startPort) {
