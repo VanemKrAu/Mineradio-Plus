@@ -23049,7 +23049,7 @@ function toggleFxPanel(force) {
     el.classList.toggle('closing', currentlyOpen);
     document.body.classList.remove('fx-panel-open');
     var cc = document.getElementById('canvas-container');
-    if (cc) cc.style.pointerEvents = '';
+    if (cc) { cc.style.pointerEvents = ''; cc.style.opacity = ''; }
     fxManualCloseAt = Date.now();
     setTimeout(function(){ el.classList.remove('closing'); }, 280);
     var fab = document.getElementById('fx-fab');
@@ -23059,7 +23059,7 @@ function toggleFxPanel(force) {
   el.classList.remove('show', 'closing');
   document.body.classList.add('fx-panel-open');
   var cc = document.getElementById('canvas-container');
-  if (cc) cc.style.pointerEvents = 'none';
+  if (cc) { cc.style.pointerEvents = 'none'; cc.style.opacity = '0.08'; }
   clearCenteredViewOffsets();
   el.classList.add('show');
   fxPanelPinned = true;
