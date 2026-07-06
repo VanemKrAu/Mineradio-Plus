@@ -17379,7 +17379,7 @@ function updateSearchModeTabs() {
 function setSearchMode(mode) {
   console.log('[UI] setSearchMode:', mode); mode = (mode === 'podcast' || mode === 'netease' || mode === 'qq' || mode === 'kugou') ? mode : 'song';
   if (searchMode === mode) return;
-  if (mode === 'kugou') { searchMode = mode; updateSearchModeTabs(); clearSearchResults(); if(q)doSearch(q);else renderSearchHistory(); return; }
+  if (mode === 'kugou') { searchMode = mode; updateSearchModeTabs(); clearSearchResults(); var sa = document.getElementById('search-area'); if (sa) setPeek(sa, true, 'search'); var q = $input ? $input.value.trim() : ''; if(q)doSearch(q);else renderSearchHistory(); return; }
   searchMode = mode;
   updateSearchModeTabs();
   clearSearchResults();
