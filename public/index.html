@@ -22467,6 +22467,12 @@ async function refreshWallpapers() {
 }
 function renderWallpaperGrid() {
   var filtered = wallpaperPickerData.wallpapers;
+  // 按修改时间倒序排序（最新下载的在前）
+  if (filtered.length) {
+    filtered = filtered.slice().sort(function(a, b) {
+      return (b.modifiedAt || 0) - (a.modifiedAt || 0);
+    });
+  }
   var statusEl = document.getElementById('wp-status');
   var gridEl = document.getElementById('wp-grid');
   if (!statusEl || !gridEl) return;
