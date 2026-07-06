@@ -21445,10 +21445,10 @@ function setPreset(p, opts) {
     else if (p === 2) { orbit.userRadius = 7.0; orbit.userPhi = 0.15; orbit.userTheta = 0.0; orbit.baselineRadius = 7.0; orbit.baselinePhi = 0.15; }
     else if (p === 3) { orbit.userRadius = 8.0; orbit.userPhi = 0.05; orbit.userTheta = 0.0; orbit.baselineRadius = 8.0; orbit.baselinePhi = 0.05; }
     else if (p === 4) { orbit.userRadius = 6.5; orbit.userPhi = 0.04; orbit.userTheta = 0.0; orbit.baselineRadius = 6.5; orbit.baselinePhi = 0.04; }
-    else if (p === 5) { orbit.userRadius = 9.4; orbit.userPhi = 0.34; orbit.userTheta = -0.52; orbit.baselineRadius = 9.4; orbit.baselinePhi = 0.34; }
+    else if (p === 5) { orbit.userRadius = 6.6; orbit.userPhi = 0.08; orbit.userTheta = 0.0; orbit.baselineRadius = 6.6; orbit.baselinePhi = 0.08; }
     else if (p === 6) { orbit.userRadius = 7.4; orbit.userPhi = 0.10; orbit.userTheta = 0.18; orbit.baselineRadius = 7.4; orbit.baselinePhi = 0.10; }
     else              { orbit.userRadius = 6.6; orbit.userPhi = 0.08; orbit.userTheta = 0.0; orbit.baselineRadius = 6.6; orbit.baselinePhi = 0.08; }
-    orbit.baselineTheta = p === 5 ? -0.52 : (p === 6 ? 0.18 : 0.0);
+    orbit.baselineTheta = p === 6 ? 0.18 : 0.0;
   }
   if (changed && !opts.silent) showToast('视觉预设: ' + presetMeta[p].name);
   var shouldCommitPlaybackPreset = !!opts.commitPlaybackPreset || !opts.noSave;
@@ -27547,8 +27547,13 @@ function animate() {
     }
     return;
   }
-  pointerParallax.x += (pointerTarget.x - pointerParallax.x) * 0.040;
-  pointerParallax.y += (pointerTarget.y - pointerParallax.y) * 0.040;
+  if (document.body.classList.contains('fx-panel-open') || emptyHomeActive) {
+    pointerParallax.x += (0 - pointerParallax.x) * 0.040;
+    pointerParallax.y += (0 - pointerParallax.y) * 0.040;
+  } else {
+    pointerParallax.x += (pointerTarget.x - pointerParallax.x) * 0.040;
+    pointerParallax.y += (pointerTarget.y - pointerParallax.y) * 0.040;
+  }
 
   // 频谱分析 — v7.1: 真正分离 kick 和人声
   // bin = sampleRate / fftSize = 44100/2048 ≈ 21.5Hz
@@ -27744,18 +27749,21 @@ function animate() {
 
   updateRipples(dt);
   updateFloatLayer(dt);
-  if (shelfManager) shelfManager.update(dt);
+  if (shelfManager && !document.body.classList.contains('fx-panel-open') && !emptyHomeActive) shelfManager.update(dt);
   tickLyricsParticles();
   updateHomeAudioVisual(dt);
 
   // 电影镜头
-  updateCinema(dt);
-  updateFreeCamera(dt);
-  updateCamera();
+  // 电影镜头（面板/主页时冻结）
+  if (!document.body.classList.contains('fx-panel-open') && !emptyHomeActive) {
+    updateCinema(dt);
+    updateFreeCamera(dt);
+    updateCamera();
+  }
   applySkullCameraPose(dt);
 
   // v7.2 旋转 = 头部+眼球追踪 + 鼠标/手势拖动 + 惯性
-  tickGestureRotation(dt);
+  if (!document.body.classList.contains('fx-panel-open') && !emptyHomeActive) tickGestureRotation(dt);
   var skullPresetActive = fx && fx.preset === SKULL_PRESET_INDEX;
   particles.visible = !skullPresetActive;
   if (bloomParticles) bloomParticles.visible = !skullPresetActive && fx.bloom && fx.bloomStrength > 0.01;
