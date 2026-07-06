@@ -96,7 +96,7 @@ function kugouCookieUserId(obj) { obj = obj || kugouCookieObject(); return Strin
 function kugouCookieToken(obj) { obj = obj || kugouCookieObject(); return obj.token || obj.Token || obj.kg_token || obj.KuGoo || obj.t || ''; }
 function kugouCookieMid(obj) { obj = obj || kugouCookieObject(); return obj.mid || obj.MID || obj.KUGOU_API_MID || KUGOU_DEFAULT_MID; }
 function kugouCookieDfid(obj) { obj = obj || kugouCookieObject(); return obj.dfid || obj.KG_dfid || obj.kg_dfid || ''; }
-function kugouCookieNickname(obj) { obj = obj || kugouCookieObject(); return obj.nickname || obj.user_name || obj.m_name || obj.name || ''; }
+function kugouCookieNickname(obj) { obj = obj || kugouCookieObject(); var n = obj.nickname || obj.user_name || obj.NickName || obj.m_name || obj.name || ''; if (n) { n = n.replace(/%u([0-9a-fA-F]{4})/g, function(_,h){ try { return String.fromCharCode(parseInt(h,16)); } catch(e) { return _; } }); } return n; }
 function kugouCookieAvatar(obj) { obj = obj || kugouCookieObject(); return obj.avatar || obj.head_img || obj.user_pic || obj.img || obj.pic || ''; }
 function kugouCookieVipType(obj) { obj = obj || kugouCookieObject(); return Number(obj.viptype || obj.vip_type || obj.VipType || 0); }
 
