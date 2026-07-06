@@ -18,6 +18,7 @@
 - **图片裁切消失** — 修复 e._mx/e._my 跨事件对象 NaN bug，改用闭包变量 lastMX/lastMY
 - **酷狗歌词前端接口** — r.lyric → r.lrc || r.lyric，补传 duration 参数
 - **设置面板点击穿透** — pointer-events: none 扩展到 #playlist-panel * 和 #pl-list *
+- **主页图片填满卡片** — 导入图片后卡片 padding 归零 + 负外边距延伸到 hero 边缘，图片完全铺满
 
 ## [1.1.1-6] - 2025-07-06
 

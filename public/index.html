@@ -27339,7 +27339,8 @@ function renderDailyReviewHero() {
   var image = '';
   try { image = localStorage.getItem(DAILY_REVIEW_IMAGE_KEY) || ''; } catch (_) {}
   hero.innerHTML =
-    '<div class="daily-review-card"' + (image ? ' style="background-image:url(' + cssImageUrl(image) + ')"' : '') + '>' +
+    '<div class="daily-review-card"' + (image ? ' style="background-image:url(' + cssImageUrl(image) + ');padding:0;margin:-28px;border-radius:28px;width:auto;height:calc(100% + 56px)"' : '') + '>' +
+      (image ? '<div style="display:flex;flex-direction:column;height:100%;justify-content:flex-end;padding:clamp(22px,3vw,38px)">' : '') +
       '<div id="daily-review-date" class="daily-review-date"></div>' +
       '<div id="daily-review-time" class="daily-review-time">--:--</div>' +
       '<div class="daily-review-quote">' + escHtml(quote.text) + '</div>' +
@@ -27349,6 +27350,7 @@ function renderDailyReviewHero() {
         '<button type="button" onclick="openDailyReviewManager()">管理热评</button>' +
         '<button type="button" onclick="nextDailyReview()">换一条</button>' +
       '</div>' +
+      (image ? '</div>' : '') +
     '</div>';
   updateDailyReviewClock();
   if (dailyReviewClockTimer) clearInterval(dailyReviewClockTimer);
