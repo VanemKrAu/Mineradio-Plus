@@ -464,15 +464,18 @@ async function getKugouLoginInfoFresh() {
 
 async function handleKugouSongUrl(hash, albumAudioId, albumId, qualityPreference, qualityHashes) {
   if (!hash) return { url: '', trial: false };
-  const useHash = qualityPreference && qualityHashes ? kugouHashForQuality(hash, qualityPreference, qualityHashes) : hash;
+  var obj = kugouCookieObject();
+  var mid = kugouCookieMid();
+  var p = { appid: KUGOU_APPID, clientver: KUGOU_CLIENTVER, mid: mid, userid: kugouCookieUserId(obj), token: kugouCookieToken(obj), hash: hash, pid: '2' };
+  p.signature = kugouAndroidSignature(p);
+  var qs = Object.keys(p).map(function(k) { return k + '=' + encodeURIComponent(p[k] || ''); }).join('&');
   try {
-    const json = await kugouTrackercdnPlayUrl(useHash, { behavior: 'play' });
-    const url = kugouPlayableUrlFromResponse(json);
-    if (url) return { url, trial: false, level: qualityPreference || 'standard' };
+    var text = await _requestText('https://gateway.kugou.com/v5/url?' + qs, { headers: { 'User-Agent': KUGOU_ANDROID_UA, 'x-router': 'trackercdn.kugou.com' } });
+    var json = JSON.parse(text || '{}');
+    var url = kugouPlayableUrlFromResponse(json);
+    if (url) return { url: url, trial: false, level: qualityPreference || 'standard' };
     return { url: '', trial: false, error: 'NO_PLAYABLE_URL' };
-  } catch (e) {
-    return { url: '', trial: false, error: e.message };
-  }
+  } catch(e) { return { url: '', trial: false, error: e.message }; }
 }
 
 // -- route mounting --
