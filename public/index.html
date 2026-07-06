@@ -22481,10 +22481,17 @@ function renderWallpaperGrid() {
       return (wp.name || '').toLowerCase().indexOf(wpSearchText) >= 0;
     });
   }
-  // 按修改时间倒序排序（最新下载的在前）
+  // 按修改时间倒序排序（最新在前），时间相同按文件夹名倒序
   filtered = filtered.slice().sort(function(a, b) {
-    return (b.modifiedAt || 0) - (a.modifiedAt || 0);
+    var ta = a.modifiedAt || 0, tb = b.modifiedAt || 0;
+    if (ta !== tb) return tb - ta;
+    var na = String(a.originalName || a.folderPath || '');
+    var nb = String(b.originalName || b.folderPath || '');
+    if (na > nb) return -1;
+    if (na < nb) return 1;
+    return 0;
   });
+  console.log('[WP] sorted, first 3:', filtered.slice(0,3).map(function(w){return w.name+' @'+w.modifiedAt}));
   statusEl.textContent = '共 ' + filtered.length + ' 个壁纸' + (wpRatingFilter !== 'all' ? '（已按分级筛选）' : '') + '，点击即可设为播放器背景。';
   gridEl.innerHTML = '';
   filtered.forEach(function(wp) {
