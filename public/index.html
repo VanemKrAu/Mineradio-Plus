@@ -236,6 +236,23 @@ body.simple-mode .control-meta{max-width:420px}
 body.simple-mode .mini-queue-popover{width:min(380px,calc(100vw - 32px))}
 @media (max-width:720px){body.simple-mode #search-area{width:calc(100vw - 28px)}body.desktop-shell.simple-mode #search-area.peek{top:58px}body.simple-mode #search-area.peek{top:24px}}
 
+/* ---------- 每日一言 ---------- */
+.daily-review-card{position:relative;z-index:2;height:100%;min-height:420px;display:flex;flex-direction:column;justify-content:flex-end;padding:clamp(22px,3vw,38px);box-sizing:border-box;background-size:cover;background-position:center;overflow:hidden}
+.daily-review-card::before{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(4,7,12,.08),rgba(4,7,12,.22) 36%,rgba(3,5,9,.90) 100%),linear-gradient(110deg,rgba(0,0,0,.18),transparent 58%);pointer-events:none}
+.daily-review-card>*{position:relative;z-index:1}
+.daily-review-date{font-size:11px;font-weight:800;letter-spacing:.15em;color:rgba(255,255,255,.62);text-transform:uppercase}
+.daily-review-time{margin-top:6px;font-size:clamp(38px,5vw,66px);font-weight:760;line-height:1;color:#fff;font-variant-numeric:tabular-nums;text-shadow:0 12px 38px rgba(0,0,0,.54)}
+.daily-review-quote{margin-top:22px;font-size:clamp(21px,2.25vw,34px);font-weight:760;line-height:1.35;color:#fff;letter-spacing:.01em;text-shadow:0 8px 34px rgba(0,0,0,.68)}
+.daily-review-source{margin-top:12px;font-size:12px;color:rgba(255,255,255,.58)}
+.daily-review-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.daily-review-actions button{height:32px;padding:0 12px;border-radius:999px;border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.26);color:rgba(255,255,255,.78);font:700 11px inherit;cursor:pointer;backdrop-filter:blur(12px)}
+.daily-review-actions button:hover{background:rgba(255,255,255,.12);color:#fff}
+.daily-review-empty{color:rgba(255,255,255,.58);font-size:13px;line-height:1.6}
+.daily-review-crop-dialog{width:min(560px,calc(100vw - 28px));align-items:center}
+.daily-review-crop-canvas{display:block;width:min(360px,76vw);aspect-ratio:3/4;border-radius:18px;background:#050608;cursor:grab;touch-action:none;box-shadow:0 20px 60px rgba(0,0,0,.48)}
+.daily-review-crop-canvas.dragging{cursor:grabbing}
+.daily-review-crop-controls{width:min(360px,76vw);display:flex;align-items:center;gap:12px;margin-top:14px;color:rgba(255,255,255,.62);font-size:11px}
+
 /* ---------- 空场 Home ---------- */
 #empty-home{position:fixed;z-index:4;left:50%;top:158px;bottom:58px;width:min(1240px,calc(100vw - 72px));transform:translateX(-50%) translateY(18px) scale(.992);opacity:0;pointer-events:none;transition:opacity .72s cubic-bezier(.16,1,.3,1),transform .72s cubic-bezier(.16,1,.3,1)}
 body.empty-home-active #empty-home{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0) scale(1)}
@@ -27234,6 +27251,171 @@ applyWallpaperModeState(false);
 setShelfMode(fx.shelf);
 applyStartupStarfieldPreset();
 restoreWallpaper();
+// ═══════════════════════════════════════════
+//  每日一言
+// ═══════════════════════════════════════════
+var DAILY_REVIEW_QUOTES_KEY = 'mineradio-daily-review-quotes-v1';
+var DAILY_REVIEW_IMAGE_KEY = 'mineradio-daily-review-image-v1';
+var dailyReviewPreviewOffset = 0;
+var dailyReviewClockTimer = null;
+var dailyReviewDefaults = [
+  { text:'喜欢是看见一个人的眉眼，爱是看见一个人的心底。', source:'每日热评' },
+  { text:'愿你在自己的世界里闪闪发光，也能照亮偶然路过的人。', source:'每日热评' },
+  { text:'有些歌不是突然好听，而是终于听懂了。', source:'每日热评' },
+  { text:'慢一点没关系，重要的是一直在向喜欢的生活靠近。', source:'每日热评' },
+  { text:'真正治愈你的，是允许一切发生之后依然热爱生活。', source:'每日热评' },
+  { text:'时间不会替你回答，但会让答案变得清楚。', source:'每日热评' },
+  { text:'我们终会在各自的路上，遇见更完整的自己。', source:'每日热评' },
+  { text:'别急着赶路，风景也在认真地等你。', source:'每日热评' }
+];
+function readDailyReviewQuotes() {
+  try {
+    var saved = JSON.parse(localStorage.getItem(DAILY_REVIEW_QUOTES_KEY) || '[]');
+    if (Array.isArray(saved) && saved.length) { return saved.filter(function(i){ return i&&i.text; }); }
+  } catch (_) {}
+  return dailyReviewDefaults.slice();
+}
+function dailyReviewDayNumber() {
+  var now = new Date();
+  return Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 86400000);
+}
+function selectedDailyReview() {
+  var quotes = readDailyReviewQuotes();
+  if (!quotes.length) return { text:'点击管理热评收录你喜欢的文字。', source:'Mineradio' };
+  var idx = ((dailyReviewDayNumber() + dailyReviewPreviewOffset) % quotes.length + quotes.length) % quotes.length;
+  return quotes[idx];
+}
+function updateDailyReviewClock() {
+  var clock = document.getElementById('daily-review-time');
+  var date = document.getElementById('daily-review-date');
+  if (!clock || !date) return;
+  var now = new Date();
+  clock.textContent = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+  date.textContent = now.toLocaleDateString('zh-CN', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+}
+function renderDailyReviewHero() {
+  var hero = document.querySelector('#empty-home .home-hero');
+  if (!hero) return;
+  var quote = selectedDailyReview();
+  var image = '';
+  try { image = localStorage.getItem(DAILY_REVIEW_IMAGE_KEY) || ''; } catch (_) {}
+  hero.innerHTML =
+    '<div class="daily-review-card"' + (image ? ' style="background-image:url(' + cssImageUrl(image) + ')"' : '') + '>' +
+      '<div id="daily-review-date" class="daily-review-date"></div>' +
+      '<div id="daily-review-time" class="daily-review-time">--:--</div>' +
+      '<div class="daily-review-quote">' + escHtml(quote.text) + '</div>' +
+      '<div class="daily-review-source">' + escHtml(quote.source || '每日热评') + '</div>' +
+      '<div class="daily-review-actions">' +
+        '<button type="button" onclick="openDailyReviewImagePicker()">导入图片</button>' +
+        '<button type="button" onclick="openDailyReviewManager()">管理热评</button>' +
+        '<button type="button" onclick="nextDailyReview()">换一条</button>' +
+      '</div>' +
+    '</div>';
+  updateDailyReviewClock();
+  if (dailyReviewClockTimer) clearInterval(dailyReviewClockTimer);
+  dailyReviewClockTimer = setInterval(updateDailyReviewClock, 15000);
+}
+function nextDailyReview() { dailyReviewPreviewOffset += 1; renderDailyReviewHero(); }
+function openDailyReviewImagePicker() {
+  var input = document.getElementById('daily-review-image-input');
+  if (!input) {
+    input = document.createElement('input');
+    input.id = 'daily-review-image-input';
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.style.display = 'none';
+    input.addEventListener('change', function(){
+      var file = input.files && input.files[0];
+      input.value = '';
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function(event){ openDailyReviewCrop(String(event.target.result || '')); };
+      reader.readAsDataURL(file);
+    });
+    document.body.appendChild(input);
+  }
+  input.click();
+}
+function closeDailyReviewCrop() { var m = document.getElementById('daily-review-crop-mask'); if(m) m.remove(); }
+function openDailyReviewCrop(src) {
+  var img = new Image();
+  img.onload = function(){
+    closeDailyReviewCrop();
+    var mask = document.createElement('div');
+    mask.id = 'daily-review-crop-mask';
+    mask.className = 'playlist-select-mask';
+    mask.innerHTML =
+      '<div class="playlist-select-dialog daily-review-crop-dialog" role="dialog" aria-modal="true" aria-label="裁切每日图片">' +
+        '<canvas id="daily-review-crop-canvas" class="daily-review-crop-canvas" width="720" height="960"></canvas>' +
+        '<div class="daily-review-crop-controls"><span>缩放</span><input id="daily-review-crop-zoom" type="range" min="1" max="3" step="0.01" value="1"></div>' +
+        '<div class="playlist-import-actions" style="width:100%"><button class="fx-mini-btn ghost" data-crop-close="1">取消</button><button class="fx-mini-btn" id="daily-review-crop-save">保存裁切</button></div>' +
+      '</div>';
+    document.body.appendChild(mask);
+    mask.addEventListener('click', function(e){ if(e.target===mask||e.target.dataset.cropClose)closeDailyReviewCrop(); });
+    var canvas = document.getElementById('daily-review-crop-canvas');
+    var ctx = canvas.getContext('2d');
+    var zoom = 1, offsetX = 0, offsetY = 0, dragging = false;
+    var w = canvas.width, h = canvas.height;
+    function redraw() {
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(img, (w-w*zoom)/2+offsetX, (h-h*zoom)/2+offsetY, w*zoom, h*zoom);
+    }
+    redraw();
+    var zoomSlider = document.getElementById('daily-review-crop-zoom');
+    zoomSlider.addEventListener('input', function(){ zoom = Number(zoomSlider.value); redraw(); });
+    canvas.addEventListener('mousedown', function(e){ dragging=true; canvas.classList.add('dragging'); e._mx=e.clientX;e._my=e.clientY; });
+    window.addEventListener('mousemove', function(e){ if(!dragging||!canvas)return; offsetX+=e.clientX-e._mx; offsetY+=e.clientY-e._my; e._mx=e.clientX;e._my=e.clientY; redraw(); });
+    window.addEventListener('mouseup', function(){ dragging=false; if(canvas)canvas.classList.remove('dragging'); });
+    var saveBtn = document.getElementById('daily-review-crop-save');
+    saveBtn.addEventListener('click', function(){
+      var out = document.createElement('canvas'); out.width=720;out.height=960;
+      var oc = out.getContext('2d');
+      oc.drawImage(img, (w-w*zoom)/2+offsetX, (h-h*zoom)/2+offsetY, w*zoom, h*zoom);
+      var dataUrl = out.toDataURL('image/jpeg', 0.85);
+      try { localStorage.setItem(DAILY_REVIEW_IMAGE_KEY, dataUrl); } catch(_) {}
+      closeDailyReviewCrop();
+      renderDailyReviewHero();
+    });
+  };
+  img.src = src;
+}
+function openDailyReviewManager() {
+  var mask = document.getElementById('daily-review-manager-mask');
+  if (mask) { mask.remove(); return; }
+  var quotes = readDailyReviewQuotes();
+  var text = quotes.map(function(q){ return q.text + ' | ' + (q.source||'我的热评'); }).join('\n');
+  mask = document.createElement('div');
+  mask.id = 'daily-review-manager-mask';
+  mask.className = 'playlist-select-mask';
+  mask.innerHTML =
+    '<div class="playlist-select-dialog daily-review-crop-dialog" role="dialog" aria-modal="true" aria-label="管理热评">' +
+      '<textarea id="daily-review-editor" class="playlist-import-input" style="min-height:280px">' + escHtml(text) + '</textarea>' +
+      '<div class="playlist-import-actions"><button class="fx-mini-btn ghost" id="daily-review-clear-image">清除图片</button><button class="fx-mini-btn" id="daily-review-save">保存热评</button></div>' +
+    '</div>';
+  document.body.appendChild(mask);
+  mask.addEventListener('click', function(e){ if(e.target===mask) mask.remove(); });
+  var clearBtn = document.getElementById('daily-review-clear-image');
+  clearBtn.addEventListener('click', function(){ try{localStorage.removeItem(DAILY_REVIEW_IMAGE_KEY)}catch(_){} mask.remove(); renderDailyReviewHero(); });
+  var saveBtn = document.getElementById('daily-review-save');
+  saveBtn.addEventListener('click', function(){
+    var lines = String(document.getElementById('daily-review-editor').value||'').split(/\n+/);
+    var items = [];
+    lines.forEach(function(line){
+      line = line.trim(); if(!line) return;
+      var parts = line.split('|');
+      var t = String(parts.shift()||'').trim();
+      var s = String(parts.join('|')||'我的热评').trim();
+      if(t) items.push({text:t, source:s||'我的热评'});
+    });
+    if(items.length) try{localStorage.setItem(DAILY_REVIEW_QUOTES_KEY,JSON.stringify(items))}catch(_){}
+    else try{localStorage.removeItem(DAILY_REVIEW_QUOTES_KEY)}catch(_){}
+    mask.remove();
+    dailyReviewPreviewOffset = 0;
+    renderDailyReviewHero();
+  });
+}
+renderDailyReviewHero();
+
 initMinimizeToTray();
 (function(){
   try {
