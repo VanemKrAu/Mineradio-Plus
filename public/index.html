@@ -22472,8 +22472,19 @@ function renderWallpaperGrid() {
   if (!statusEl || !gridEl) return;
   if (wpRatingFilter !== 'all') {
     filtered = filtered.filter(function(wp){
-      if (!wp.rating) return wpRatingFilter === 'Everyone';
-      return wp.rating === wpRatingFilter;
+      var r = String(wp.rating || '').trim() || 'Everyone';
+      if (r.toLowerCase() !== wpRatingFilter.toLowerCase()) {
+        // 成人壁纸始终只在 Mature 筛选时显示
+        if (r.toLowerCase() === 'mature') {
+          return wpRatingFilter.toLowerCase() === 'mature';
+        }
+        // 轻度不适壁纸在 Questionable 或 Mature 筛选时显示
+        if (r.toLowerCase() === 'questionable') {
+          return wpRatingFilter.toLowerCase() === 'questionable' || wpRatingFilter.toLowerCase() === 'mature';
+        }
+        return false;
+      }
+      return true;
     });
   }
   if (wpSearchText) {

@@ -33,7 +33,7 @@ function readProjectMeta(folderPath) {
       type: String(json.type || 'scene').trim(),
       mainFile: String(json.file || 'scene.json').trim(),
       supportsVideo: !!json.supportsvideo,
-      rating: String(json.contentrating || 'Everyone').trim(),
+      rating: String((json.contentrating || '')).trim(),
     };
   } catch (_) {
     return { title: '', type: '', mainFile: 'scene.json', supportsVideo: false, rating: '' };
