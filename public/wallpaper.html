@@ -7,7 +7,9 @@
   <style>
     html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000}
     canvas{position:absolute;inset:0;width:100%;height:100%}
-    video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none}
+    canvas#gl{z-index:2}
+    canvas#overlay{z-index:3}
+    video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:1}
   </style>
 </head>
 <body>
@@ -188,12 +190,10 @@
         bgVideo.src = scene.videos[0].url;
         bgVideo.style.display = 'block';
         bgVideo.play().catch(function() {});
-        glCanvas.style.display = 'none';
-        hasVideo = true;
-        console.log('[WP] Video mode:', scene.videos[0].url);
+        console.log('[WP] Video background:', scene.videos[0].url);
       }
 
-      // Handle video from layers (fallback)
+      // Handle video from layers (play behind WebGL)
       if (!hasVideo) {
         for (var k = 0; k < sceneLayers.length; k++) {
           if (sceneLayers[k].videoFile && scene.videos) {
@@ -202,7 +202,6 @@
                 bgVideo.src = scene.videos[v].url;
                 bgVideo.style.display = 'block';
                 bgVideo.play().catch(function() {});
-                glCanvas.style.display = 'none';
                 hasVideo = true;
                 console.log('[WP] Video from layer:', sceneLayers[k].name);
                 break;
