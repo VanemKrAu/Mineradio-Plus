@@ -25153,6 +25153,7 @@ try {
   
   var c = document.getElementById('pkg-bg-canvas');
   if (!c) { console.log('[PKG] no canvas'); return; }
+  pkgBg.canvas = c;
   
   try { pkgBg.gl = c.getContext('webgl', {premultipliedAlpha:false,alpha:true}); } catch(_) {}
   if (!pkgBg.gl) { console.log('[PKG] no WebGL'); return; }
