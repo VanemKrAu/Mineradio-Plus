@@ -19819,6 +19819,7 @@ function applyWallpaper(wp) {
   });
   closeWallpaperPicker();
   // 加载 PKG 多层场景到主窗口背景
+  console.log('[PKG-BG] api check: window.desktopWindow=' + (typeof window.desktopWindow) + ' extractWallpaperScene=' + (window.desktopWindow ? typeof window.desktopWindow.extractWallpaperScene : 'N/A'));
   if (window.desktopWindow && typeof window.desktopWindow.extractWallpaperScene === 'function') {
     showToast('正在解析壁纸场景...');
     window.desktopWindow.extractWallpaperScene(wp.folderPath).then(function(scene) {
@@ -19836,6 +19837,8 @@ function applyWallpaper(wp) {
       console.warn('[PKG-BG] extractWallpaperScene failed:', e);
       showToast('壁纸场景解析失败');
     });
+  } else {
+    console.warn('[PKG-BG] API不可用: desktopWindow=' + typeof window.desktopWindow);
   }
   var api = window.desktopWindow;
   if (!api || typeof api.readWallpaperFile !== "function") { showToast("API 不可用"); return; }
