@@ -12373,9 +12373,9 @@ document.addEventListener('keydown', function(e){
   if (isTypingTarget(e.target)) return;
   // PKG 壁纸纹理编辑快捷键 (W/E/Q) — 转发到壁纸窗口
   if (!e.ctrlKey && !e.altKey && !e.metaKey) {
-    if (e.code === 'KeyW') { console.log('[WP] W key pressed, sending toggleEdit'); e.preventDefault(); sendWallpaperCmd('toggleEdit'); return; }
-    if (e.code === 'KeyE') { console.log('[WP] E key pressed, sending delete'); e.preventDefault(); sendWallpaperCmd('delete'); return; }
-    if (e.code === 'KeyQ') { console.log('[WP] Q key pressed, sending add'); e.preventDefault(); sendWallpaperCmd('add'); return; }
+    if (e.code === 'KeyW') { e.preventDefault(); sendWallpaperCmd('toggleEdit'); return; }
+    if (e.code === 'KeyE') { e.preventDefault(); sendWallpaperCmd('delete'); return; }
+    if (e.code === 'KeyQ') { e.preventDefault(); sendWallpaperCmd('add'); return; }
   }
   markRenderInteraction('keyboard', 700);
   if (e.code === 'KeyK') {
@@ -19812,8 +19812,6 @@ function applyWallpaper(wp) {
   wallpaperPickerData.currentFolder = wp.folderPath || '';
   wallpaperPickerData.currentMedia = null;
   try { localStorage.setItem("mineradio-wallpaper-current", wp.folderPath); } catch (e) {}
-  // 始终尝试加载 PKG 多层场景到壁纸窗口
-  loadWallpaperSceneIfPkg(wp);
   var cards = document.querySelectorAll("#wp-grid .wp-card");
   cards.forEach(function(c){ c.classList.remove("active"); });
   cards.forEach(function(c){
@@ -19901,19 +19899,9 @@ function applyWallpaper(wp) {
   }
 }
 function loadWallpaperSceneIfPkg(wp) {
-  console.log('[WP] loadWallpaperSceneIfPkg called, wp:', wp ? (wp.name + ' hasPkg=' + wp.hasPkg + ' folder=' + wp.folderPath) : 'null');
-  if (!wp || !wp.folderPath) return;
-  var api = window.desktopWindow;
-  if (!api || typeof api.loadWallpaperScene !== 'function') return;
-  console.log('[WP] loading PKG scene:', wp.folderPath);
-  // 启动壁纸窗口渲染PKG多层场景
-  api.loadWallpaperScene(wp.folderPath).then(function(r) {
-    console.log('[WP] loadWallpaperScene done:', r);
-    if (r && r.ok) showToast('PKG场景已加载，按W进入编辑');
-  }).catch(function(e) {
-    console.warn('[WP] loadWallpaperScene failed:', e);
-    showToast('壁纸场景加载失败');
-  });
+  if (!wp || !wp.folderPath || !wp.hasPkg) return;
+  // 壁纸窗口仅在桌面壁纸模式下可用，暂不自动创建
+  return;
 }
 function restoreWallpaper() {
   try {
@@ -24437,15 +24425,9 @@ function pushWallpaperState(force) {
   api.updateWallpaperMode(payload).catch(function(e){ console.warn('wallpaper update failed:', e); });
 }
 function sendWallpaperCmd(cmd) {
-  console.log('[WP] sendWallpaperCmd:', cmd);
   var api = getDesktopWindowApi();
-  if (!api) { showToast('壁纸窗口不可用（需要桌面模式）'); return; }
-  if (typeof api.wallpaperCmd !== 'function') { showToast('壁纸编辑功能不可用'); return; }
-  api.wallpaperCmd(cmd).then(function(r) {
-    if (!r || !r.ok) showToast('壁纸窗口未就绪，请先选择PKG壁纸');
-  }).catch(function(e) {
-    showToast('壁纸命令失败: ' + e.message);
-  });
+  if (!api || typeof api.wallpaperCmd !== 'function') return;
+  api.wallpaperCmd(cmd).catch(function(e){ console.warn('wallpaper cmd failed:', e); });
 }
 function applyWallpaperModeState(force) {
   var api = getDesktopWindowApi();

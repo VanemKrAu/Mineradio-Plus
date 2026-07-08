@@ -1118,7 +1118,6 @@ function loadWallpaperScene(folderPath) {
   wallpaperSceneFolder = folderPath;
   try {
     const scene = wallpaperScanner.extractWallpaperScene(folderPath);
-    console.log('[WP] extractWallpaperScene:', scene && scene.ok, 'layers:', scene && scene.layers ? scene.layers.length : 0, 'textures:', scene && scene.textures ? scene.textures.length : 0);
     if (scene && scene.ok) {
       scene.folderPath = folderPath;  // 供 wallpaper.html 持久化编辑状态
       // convert paths to file:// URLs
@@ -1575,14 +1574,11 @@ ipcMain.handle('mineradio-wallpaper-set-enabled', async (_event, enabled, payloa
 
 ipcMain.handle('mineradio-wallpaper-load-scene', async (_event, folderPath) => {
     try {
-      console.log('[WP-IPC] loadWallpaperScene called, folderPath:', folderPath);
-      // 确保壁纸窗口存在
-      if (!wallpaperWindow || wallpaperWindow.isDestroyed()) {
-        console.log('[WP-IPC] creating wallpaper window...');
-        createWallpaperWindow({ folderPath: folderPath });
+      if (wallpaperWindow && !wallpaperWindow.isDestroyed()) {
+        loadWallpaperScene(folderPath);
+        return { ok: true };
       }
-      loadWallpaperScene(folderPath);
-      return { ok: true };
+      return { ok: false, error: 'NO_WALLPAPER_WINDOW' };
     } catch (e) {
       return { ok: false, error: e.message };
     }
