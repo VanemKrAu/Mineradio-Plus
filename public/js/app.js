@@ -19907,8 +19907,12 @@ function loadWallpaperSceneIfPkg(wp) {
   if (!api || typeof api.loadWallpaperScene !== 'function') return;
   console.log('[WP] loading PKG scene:', wp.folderPath);
   // 启动壁纸窗口渲染PKG多层场景
-  api.loadWallpaperScene(wp.folderPath).catch(function(e) {
+  api.loadWallpaperScene(wp.folderPath).then(function(r) {
+    console.log('[WP] loadWallpaperScene done:', r);
+    if (r && r.ok) showToast('PKG场景已加载，按W进入编辑');
+  }).catch(function(e) {
     console.warn('[WP] loadWallpaperScene failed:', e);
+    showToast('壁纸场景加载失败');
   });
 }
 function restoreWallpaper() {
@@ -24433,9 +24437,15 @@ function pushWallpaperState(force) {
   api.updateWallpaperMode(payload).catch(function(e){ console.warn('wallpaper update failed:', e); });
 }
 function sendWallpaperCmd(cmd) {
+  console.log('[WP] sendWallpaperCmd:', cmd);
   var api = getDesktopWindowApi();
-  if (!api || typeof api.wallpaperCmd !== 'function') return;
-  api.wallpaperCmd(cmd).catch(function(e){ console.warn('wallpaper cmd failed:', e); });
+  if (!api) { showToast('壁纸窗口不可用（需要桌面模式）'); return; }
+  if (typeof api.wallpaperCmd !== 'function') { showToast('壁纸编辑功能不可用'); return; }
+  api.wallpaperCmd(cmd).then(function(r) {
+    if (!r || !r.ok) showToast('壁纸窗口未就绪，请先选择PKG壁纸');
+  }).catch(function(e) {
+    showToast('壁纸命令失败: ' + e.message);
+  });
 }
 function applyWallpaperModeState(force) {
   var api = getDesktopWindowApi();
