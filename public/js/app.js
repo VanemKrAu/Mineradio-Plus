@@ -25142,7 +25142,6 @@ function animate() {
     if (thumbCoverEl) thumbCoverEl.style.transform = 'scale(' + s + ')';
   }
 
-  renderPkgBg();
   renderer.render(scene, camera);
 }
 
