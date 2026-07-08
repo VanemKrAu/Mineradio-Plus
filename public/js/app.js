@@ -12373,9 +12373,9 @@ document.addEventListener('keydown', function(e){
   if (isTypingTarget(e.target)) return;
   // PKG 壁纸纹理编辑快捷键 (W/E/Q) — 转发到壁纸窗口
   if (!e.ctrlKey && !e.altKey && !e.metaKey) {
-    if (e.code === 'KeyW') { e.preventDefault(); sendWallpaperCmd('toggleEdit'); return; }
-    if (e.code === 'KeyE') { e.preventDefault(); sendWallpaperCmd('delete'); return; }
-    if (e.code === 'KeyQ') { e.preventDefault(); sendWallpaperCmd('add'); return; }
+    if (e.code === 'KeyW') { e.preventDefault(); if (typeof pkgBgToggleEdit === 'function' && pkgBg.scene) { pkgBgToggleEdit(); } else { showToast('请先选择PKG壁纸'); } return; }
+    if (e.code === 'KeyE') { e.preventDefault(); if (typeof pkgBgDeleteLayer === 'function' && pkgBg.scene && pkgBg.editMode) { pkgBgDeleteLayer(); } else if (pkgBg.scene) { showToast('请先按W进入编辑模式'); } return; }
+    if (e.code === 'KeyQ') { e.preventDefault(); if (typeof pkgBgAddLayer === 'function' && pkgBg.scene && pkgBg.editMode) { pkgBgAddLayer(); } else if (pkgBg.scene) { showToast('请先按W进入编辑模式'); } return; }
   }
   markRenderInteraction('keyboard', 700);
   if (e.code === 'KeyK') {
@@ -25331,12 +25331,4 @@ function pkgBgToggleEdit() {
 initPkgBg();
 
 // 重写 sendWallpaperCmd —— 改为直接操作主窗口 PKG 背景层
-sendWallpaperCmd = function(cmd) {
-  if (!pkgBg.scene) { showToast('请先选择PKG壁纸'); return; }
-  if (cmd === 'toggleEdit') pkgBgToggleEdit();
-  if (!pkgBg.editMode) return;
-  if (cmd === 'add') pkgBgAddLayer();
-  if (cmd === 'delete') pkgBgDeleteLayer();
-};
-
 animate();
