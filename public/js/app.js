@@ -19808,6 +19808,8 @@ function loadImageAsDataUrl(filePath) {
 }
 function applyWallpaper(wp) {
   if (!wp || !wp.previewPath) return;
+  // 加载 PKG 多层场景（必须在其他异步操作之前触发）
+  loadPkgBgFromApply(wp);
   wallpaperPickerData.currentWallpaper = wp.previewPath;
   wallpaperPickerData.currentFolder = wp.folderPath || '';
   wallpaperPickerData.currentMedia = null;
@@ -19818,28 +19820,6 @@ function applyWallpaper(wp) {
     if (c.getAttribute("data-path") === wp.previewPath) c.classList.add("active");
   });
   closeWallpaperPicker();
-  // 加载 PKG 多层场景到主窗口背景
-  console.log('[PKG-BG] api check: window.desktopWindow=' + (typeof window.desktopWindow) + ' extractWallpaperScene=' + (window.desktopWindow ? typeof window.desktopWindow.extractWallpaperScene : 'N/A'));
-  if (window.desktopWindow && typeof window.desktopWindow.extractWallpaperScene === 'function') {
-    showToast('正在解析壁纸场景...');
-    window.desktopWindow.extractWallpaperScene(wp.folderPath).then(function(scene) {
-      console.log('[PKG-BG] extractWallpaperScene result: ok=' + (scene&&scene.ok) + ' layers=' + ((scene&&scene.layers)||[]).length + ' textures=' + ((scene&&scene.textures)||[]).length);
-      if (scene && scene.ok && scene.layers && scene.layers.length > 0) {
-        loadPkgBgScene(scene).then(function(ok) {
-          if (ok) showToast('壁纸场景已加载 (' + scene.layers.length + '层)，按W编辑');
-        });
-      } else if (scene && scene.ok && scene.textures && scene.textures.length > 0) {
-        showToast('壁纸无图层定义，仅单层显示');
-      } else {
-        showToast('壁纸无可解析的图层');
-      }
-    }).catch(function(e){
-      console.warn('[PKG-BG] extractWallpaperScene failed:', e);
-      showToast('壁纸场景解析失败');
-    });
-  } else {
-    console.warn('[PKG-BG] API不可用: desktopWindow=' + typeof window.desktopWindow);
-  }
   var api = window.desktopWindow;
   if (!api || typeof api.readWallpaperFile !== "function") { showToast("API 不可用"); return; }
   // 1) Try MP4 video first (wp.mp4Files is an array of filenames)
@@ -25216,6 +25196,26 @@ function loadPkgBgTexture(name, url) {
     };
     img.onerror = fail;
     img.src = url;
+  });
+}
+
+// 从 applyWallpaper 调用的入口
+function loadPkgBgFromApply(wp) {
+  if (!wp || !wp.folderPath) return;
+  var api = window.desktopWindow;
+  if (!api || typeof api.extractWallpaperScene !== 'function') {
+    showToast('桌面API不可用');
+    return;
+  }
+  showToast('正在解析壁纸场景...');
+  api.extractWallpaperScene(wp.folderPath).then(function(scene) {
+    if (scene && scene.ok && scene.layers && scene.layers.length > 0) {
+      loadPkgBgScene(scene).then(function(ok) {
+        if (ok) showToast('壁纸场景已加载 (' + scene.layers.length + '层)，按W编辑');
+      });
+    }
+  }).catch(function(e) {
+    console.warn('[PKG-BG] failed:', e);
   });
 }
 
