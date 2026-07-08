@@ -19812,6 +19812,8 @@ function applyWallpaper(wp) {
   wallpaperPickerData.currentFolder = wp.folderPath || '';
   wallpaperPickerData.currentMedia = null;
   try { localStorage.setItem("mineradio-wallpaper-current", wp.folderPath); } catch (e) {}
+  // 始终尝试加载 PKG 多层场景到壁纸窗口
+  loadWallpaperSceneIfPkg(wp);
   var cards = document.querySelectorAll("#wp-grid .wp-card");
   cards.forEach(function(c){ c.classList.remove("active"); });
   cards.forEach(function(c){
