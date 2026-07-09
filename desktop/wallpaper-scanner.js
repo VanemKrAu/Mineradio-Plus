@@ -469,6 +469,13 @@ function extractWallpaperScene(folderPath) {
       }
     } catch (_) {}
     result.layers = parseSceneJson(scenePath, cacheDir) || [];
+    // normalize layer origins from scene pixels to [0,1]
+    var sw = result.sceneWidth || 1920;
+    var sh = result.sceneHeight || 1080;
+    for (var ln = 0; ln < result.layers.length; ln++) {
+      var ly = result.layers[ln];
+      if (ly.origin) { ly.origin[0] /= sw; ly.origin[1] /= sh; }
+    }
   }
   if (!result.sceneWidth) { result.sceneWidth = 1920; result.sceneHeight = 1080; }
 
