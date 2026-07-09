@@ -179,6 +179,45 @@ function autoDetectRoots() {
 
 const REPKG_EXE = path.join(__dirname, '..', 'build', 'tools', 'RePKG.exe');
 
+// ─── MDL 解析（读取 AABB 用于 puppeted 层位置矫正）───
+var MDL_FLAG = { NORMAL:0x02, TANGENT:0x04, UV:0x08, UV2:0x20, EXTRA4:0x10000, SKIN_BLEND:0x800000, SKIN_WEIGHT:0x1000000 };
+function readString(buf, off) {
+  var end = off;
+  while (end < buf.length && buf[end] !== 0) end++;
+  return { str: buf.toString('utf8', off, end), next: end + 1 };
+}
+function parseMdlAabb(filePath) {
+  try {
+    var buf = fs.readFileSync(filePath);
+    if (buf.length < 29) return null;
+    var magic = buf.toString('ascii', 0, 7);
+    if (!magic.startsWith('MDLV00')) return null;
+    var mdlv = parseInt(magic.slice(4), 10);
+    if (mdlv < 14 || mdlv > 19) return null;
+    // ReadMdlVersion 读 9 字节（MDLV0017\0），所以从 offset 9 开始
+    var off = 9;
+    var mdlFlag = buf.readUInt32LE(off); off += 4; // skip
+    var unkA = buf.readUInt32LE(off); off += 4; // should be 1
+    if (unkA !== 1) return null;
+    var meshCount = buf.readUInt32LE(off); off += 4;
+    if (meshCount === 0) return null;
+    // 只读第一个 mesh 的 material + AABB
+    var end = off;
+    while (end < buf.length && buf[end] !== 0) end++;
+    var matName = buf.toString('utf8', off, end);
+    off = end + 1;
+    var flagA = buf.readUInt32LE(off); off += 4;
+    if (flagA === 2) off += 4;
+    if (mdlv >= 17) {
+      return { material: matName,
+               aabb: { min: [buf.readFloatLE(off), buf.readFloatLE(off+4), buf.readFloatLE(off+8)],
+                       max: [buf.readFloatLE(off+12), buf.readFloatLE(off+16), buf.readFloatLE(off+20)] },
+               mdlv: mdlv };
+    }
+    return null;
+  } catch(e) { return null; }
+}
+
 /**
  * Run RePKG to extract scene.pkg into cache directory.
  * Returns path to cache dir or empty string on failure.
@@ -380,18 +419,55 @@ function parseSceneJson(scenePath, cacheDir) {
       if (obj.visible === false) continue;
 
       var texFile = resolveObjectTexture(obj.image);
+      // solidlayer 纯色层：用白色纹理 + color 作为 tint
+      if (!texFile && obj.image && obj.image.indexOf('solidlayer') >= 0) {
+        texFile = '__solid__';
+      }
+      if (!texFile) continue;
       var origin = parseVec3(obj.origin);
       var scale = parseVec3(obj.scale);
       var angles = parseVec3(obj.angles);
+
+      // 检查模型 JSON 是否有 puppet，提取 MDL AABB → 矫正 origin
+      var mdlAabb = null;
+      try {
+        var modelPath = path.join(cacheDir, path.basename(obj.image).replace(/\.json$/i, '') + '_puppet.mdl');
+        if (!fs.existsSync(modelPath)) {
+          // 尝试 models 子目录
+          var altPath = path.join(cacheDir, path.basename(obj.image));
+          if (fs.existsSync(altPath)) { var modelJson = JSON.parse(fs.readFileSync(altPath, 'utf8'));
+            if (modelJson.puppet) {
+              var mdlPath = path.join(cacheDir, modelJson.puppet);
+              if (fs.existsSync(mdlPath)) modelPath = mdlPath;
+            }
+          }
+        }
+        if (fs.existsSync(modelPath)) mdlAabb = parseMdlAabb(modelPath);
+      } catch(_) {}
+      // AABB 中心偏移
+      var aoX = 0, aoY = 0;
+      if (mdlAabb && mdlAabb.aabb) {
+        aoX = (mdlAabb.aabb.min[0] + mdlAabb.aabb.max[0]) / 2;
+        aoY = (mdlAabb.aabb.min[1] + mdlAabb.aabb.max[1]) / 2;
+      }
+
+      var solidColor = null;
+      if (texFile === '__solid__' && obj.color) {
+        // 颜色可能是 RGB 字符串 "0.3 0.7 1.0"、JSON 对象或脚本
+        var c = obj.color;
+        if (typeof c === 'string') { var parts = c.split(/[\s,]+/); solidColor = parts.map(Number); }
+        else if (c.value && typeof c.value === 'string') { var parts = c.value.split(/[\s,]+/); solidColor = parts.map(Number); }
+        if (!solidColor || solidColor.length < 3 || isNaN(solidColor[0])) solidColor = [1, 1, 1];
+      }
 
       layers.push({
         name: obj.name || '', type: 'image', visible: true, opacity: 1,
         blending: BLEND[obj.colorBlendMode] || 'opaque',
         copybackground: !!obj.copybackground,
-        origin: origin.length >= 2 ? [origin[0], origin[1]] : [0.5, 0.5],
+        origin: origin.length >= 2 ? [origin[0] + aoX, origin[1] + aoY] : [0.5, 0.5],
         scale: scale.length >= 2 ? [scale[0], scale[1]] : [1, 1],
         angles: angles.length >= 3 ? angles : [0, 0, 0],
-        tint: [1, 1, 1],
+        tint: solidColor || [1, 1, 1],
         effects: Array.isArray(obj.effects) ? obj.effects : [],
         imageFile: texFile || '',
       });

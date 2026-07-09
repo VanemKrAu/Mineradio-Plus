@@ -25213,6 +25213,11 @@ try {
   pkgBg.angleLoc = gl.getUniformLocation(pkgBg.prog, 'u_angle');
   pkgBg.quadBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, pkgBg.quadBuf);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+  // 1x1 白色纹理供纯色层使用
+  pkgBg._solidTex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, pkgBg._solidTex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([255,255,255,255]));
+  gl.bindTexture(gl.TEXTURE_2D, null);
   console.log('[PKG] Shaders compiled');
 
   pkgBg.loadScene = async function(scene) {
@@ -25248,6 +25253,7 @@ try {
       });
     }
     console.log('[PKG] DONE: ' + Object.keys(pkgBg.textures).length + ' textures');
+    pkgBg.loadEdits();
     var bg = document.getElementById('custom-bg');
     if (bg) bg.style.setProperty('--custom-bg-image-opacity', '0');
     if (typeof THREE !== 'undefined' && typeof window.scene !== 'undefined' && window.scene) {
@@ -25319,7 +25325,7 @@ try {
     for (var i = 0; i < pkgBg.layers.length; i++) {
       var layer = pkgBg.layers[i];
       if (!layer.visible || layer.hidden) continue;
-      var tex = pkgBg.textures[layer.imageFile];
+      var tex = layer.imageFile === '__solid__' ? pkgBg._solidTex : pkgBg.textures[layer.imageFile];
       if (!tex) continue;
       var blend = (layer.blending || 'opaque').toLowerCase();
       if (blend === 'additive') { gl.blendFunc(gl.SRC_ALPHA, gl.ONE); gl.blendEquation(gl.FUNC_ADD); }
@@ -25330,7 +25336,9 @@ try {
       gl.uniform2f(gl.getUniformLocation(pkgBg.prog, 'u_off'), (layer.origin||[0.5,0.5])[0], (layer.origin||[0.5,0.5])[1]);
       var sw = (pkgBg.scene && pkgBg.scene.sceneWidth) || 1920;
       var sh = (pkgBg.scene && pkgBg.scene.sceneHeight) || 1080;
-      var tw = layer._texW || sw, th = layer._texH || sh;
+      var tw = layer._texW || (layer.imageFile === '__solid__' ? sw : 0);
+      var th = layer._texH || (layer.imageFile === '__solid__' ? sh : 0);
+      if (!tw || !th) continue; // 纹理还没加载完，跳过等下一帧
       var mult = (layer.scale||[1,1]);
       var msx = mult[0] === 0 ? 1 : mult[0], msy = mult[1] === 0 ? 1 : mult[1];
       var texAspect = tw / th;
@@ -25397,6 +25405,9 @@ try {
         window.desktopWindow.extractWallpaperScene(wp.folderPath).then(function(s) {
           if (s && s.ok) pkgBg.loadScene(s);
         });
+      } else {
+        // 非 PKG 壁纸（视频/普通图片），清除之前的 PKG 场景
+        pkgBg.clear();
       }
       return result;
     };
