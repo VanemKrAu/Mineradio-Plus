@@ -25270,6 +25270,9 @@ try {
       window.scene.background = null;
       pkgBg._bgTexture = null;
     }
+    // 恢复 CSS 背景（视频/图片壁纸用）
+    var bg = document.getElementById('custom-bg');
+    if (bg) bg.style.setProperty('--custom-bg-image-opacity', '1');
   };
 
   // 添加一层纹理（从 scene.textures 中找未使用的）
@@ -25404,9 +25407,9 @@ try {
       if (wp && wp.folderPath && window.desktopWindow && window.desktopWindow.extractWallpaperScene) {
         window.desktopWindow.extractWallpaperScene(wp.folderPath).then(function(s) {
           if (s && s.ok) pkgBg.loadScene(s);
+          else pkgBg.clear();
         });
       } else {
-        // 非 PKG 壁纸（视频/普通图片），清除之前的 PKG 场景
         pkgBg.clear();
       }
       return result;

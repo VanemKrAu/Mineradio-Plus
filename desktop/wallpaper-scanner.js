@@ -179,42 +179,71 @@ function autoDetectRoots() {
 
 const REPKG_EXE = path.join(__dirname, '..', 'build', 'tools', 'RePKG.exe');
 
-// ─── MDL 解析（读取 AABB 用于 puppeted 层位置矫正）───
-var MDL_FLAG = { NORMAL:0x02, TANGENT:0x04, UV:0x08, UV2:0x20, EXTRA4:0x10000, SKIN_BLEND:0x800000, SKIN_WEIGHT:0x1000000 };
-function readString(buf, off) {
+// ─── MDL 解析（读取 AABB 和骨骼数据用于 puppeted 层位置矫正）───
+function readCStr(buf, off) {
   var end = off;
   while (end < buf.length && buf[end] !== 0) end++;
   return { str: buf.toString('utf8', off, end), next: end + 1 };
 }
-function parseMdlAabb(filePath) {
+function parseMdl(filePath) {
   try {
     var buf = fs.readFileSync(filePath);
-    if (buf.length < 29) return null;
+    if (buf.length < 30) return null;
     var magic = buf.toString('ascii', 0, 7);
     if (!magic.startsWith('MDLV00')) return null;
     var mdlv = parseInt(magic.slice(4), 10);
     if (mdlv < 14 || mdlv > 19) return null;
-    // ReadMdlVersion 读 9 字节（MDLV0017\0），所以从 offset 9 开始
+    // ReadMdlVersion 读 9 字节
     var off = 9;
-    var mdlFlag = buf.readUInt32LE(off); off += 4; // skip
-    var unkA = buf.readUInt32LE(off); off += 4; // should be 1
+    var mdlFlag = buf.readUInt32LE(off); off += 4;
+    var unkA = buf.readUInt32LE(off); off += 4;
     if (unkA !== 1) return null;
     var meshCount = buf.readUInt32LE(off); off += 4;
     if (meshCount === 0) return null;
-    // 只读第一个 mesh 的 material + AABB
-    var end = off;
-    while (end < buf.length && buf[end] !== 0) end++;
-    var matName = buf.toString('utf8', off, end);
-    off = end + 1;
+    // 读第一个 mesh 的 material + AABB
+    var r = readCStr(buf, off); off = r.next;
+    var matName = r.str;
     var flagA = buf.readUInt32LE(off); off += 4;
     if (flagA === 2) off += 4;
+    var result = { material: matName, mdlv: mdlv, bones: [] };
     if (mdlv >= 17) {
-      return { material: matName,
-               aabb: { min: [buf.readFloatLE(off), buf.readFloatLE(off+4), buf.readFloatLE(off+8)],
-                       max: [buf.readFloatLE(off+12), buf.readFloatLE(off+16), buf.readFloatLE(off+20)] },
-               mdlv: mdlv };
+      result.aabb = {
+        min: [buf.readFloatLE(off), buf.readFloatLE(off+4), buf.readFloatLE(off+8)],
+        max: [buf.readFloatLE(off+12), buf.readFloatLE(off+16), buf.readFloatLE(off+20)]
+      };
     }
-    return null;
+    // 找 MDLS 段（骨骼数据）
+    for (var i = 0; i < buf.length - 4; i++) {
+      if (buf.toString('ascii', i, i+4) === 'MDLS') {
+        var s = i + 9; // skip MDLS0002\0
+        s += 4; // end_offset
+        var boneCount = buf.readUInt16LE(s); s += 2;
+        s += 2; // zero pad
+        for (var b = 0; b < boneCount; b++) {
+          var nr = readCStr(buf, s); s = nr.next;
+          s += 4; // simType (i32)
+          var parentId = buf.readInt32LE(s); s += 4;
+          var tx = buf.readFloatLE(s), ty = buf.readFloatLE(s+4), tz = buf.readFloatLE(s+8); s += 12;
+          var sx = buf.readFloatLE(s), sy = buf.readFloatLE(s+4), sz = buf.readFloatLE(s+8); s += 12;
+          var rx = buf.readFloatLE(s), ry = buf.readFloatLE(s+4), rz = buf.readFloatLE(s+8); s += 12;
+          result.bones.push({ name: nr.str, parent: parentId, trans: [tx, ty, tz], scale: [sx, sy, sz], rot: [rx, ry, rz] });
+        }
+        // 计算世界空间位置
+        for (var b2 = 0; b2 < result.bones.length; b2++) {
+          var bn = result.bones[b2];
+          if (bn.parent >= 0 && bn.parent < result.bones.length) {
+            bn.world = [
+              result.bones[bn.parent].world[0] + bn.trans[0],
+              result.bones[bn.parent].world[1] + bn.trans[1]
+            ];
+          } else {
+            bn.world = [bn.trans[0], bn.trans[1]];
+          }
+        }
+        break;
+      }
+    }
+    return result;
   } catch(e) { return null; }
 }
 
@@ -428,28 +457,29 @@ function parseSceneJson(scenePath, cacheDir) {
       var scale = parseVec3(obj.scale);
       var angles = parseVec3(obj.angles);
 
-      // 检查模型 JSON 是否有 puppet，提取 MDL AABB → 矫正 origin
-      var mdlAabb = null;
+      // 检查模型 JSON 是否有 puppet，提取 MDL 骨骼位置
+      var aoX = 0, aoY = 0;
       try {
-        var modelPath = path.join(cacheDir, path.basename(obj.image).replace(/\.json$/i, '') + '_puppet.mdl');
-        if (!fs.existsSync(modelPath)) {
-          // 尝试 models 子目录
+        var mdlPath = path.join(cacheDir, path.basename(obj.image).replace(/\.json$/i,'') + '_puppet.mdl');
+        if (!fs.existsSync(mdlPath)) {
           var altPath = path.join(cacheDir, path.basename(obj.image));
-          if (fs.existsSync(altPath)) { var modelJson = JSON.parse(fs.readFileSync(altPath, 'utf8'));
+          if (fs.existsSync(altPath)) {
+            var modelJson = JSON.parse(fs.readFileSync(altPath, 'utf8'));
             if (modelJson.puppet) {
-              var mdlPath = path.join(cacheDir, modelJson.puppet);
-              if (fs.existsSync(mdlPath)) modelPath = mdlPath;
+              var p2 = path.join(cacheDir, modelJson.puppet);
+              if (fs.existsSync(p2)) mdlPath = p2;
             }
           }
         }
-        if (fs.existsSync(modelPath)) mdlAabb = parseMdlAabb(modelPath);
+        if (fs.existsSync(mdlPath)) {
+          var mdl = parseMdl(mdlPath);
+          if (mdl && mdl.bones && mdl.bones.length > 0) {
+            // 用最后一个骨骼的世界位置作为偏移
+            var last = mdl.bones[mdl.bones.length - 1];
+            if (last.world) { aoX = last.world[0]; aoY = last.world[1]; }
+          }
+        }
       } catch(_) {}
-      // AABB 中心偏移
-      var aoX = 0, aoY = 0;
-      if (mdlAabb && mdlAabb.aabb) {
-        aoX = (mdlAabb.aabb.min[0] + mdlAabb.aabb.max[0]) / 2;
-        aoY = (mdlAabb.aabb.min[1] + mdlAabb.aabb.max[1]) / 2;
-      }
 
       var solidColor = null;
       if (texFile === '__solid__' && obj.color) {
