@@ -718,7 +718,9 @@ function readSavedPlaybackVisualPreset() {
   try {
     var raw = JSON.parse(localStorage.getItem(LYRIC_LAYOUT_STORE_KEY) || '{}') || {};
     if (!Object.prototype.hasOwnProperty.call(raw, 'preset')) return fxDefaults.preset;
-    var savedPreset = clampRange(Number(raw.preset) || 0, 0, presetMeta.length - 1);
+    var numPreset = Number(raw.preset);
+    if (!isFinite(numPreset)) return fxDefaults.preset;
+    var savedPreset = clampRange(numPreset, 0, 100); // fixed: presetMeta not defined yet at module init
     if (savedPreset === 3 && raw.visualPresetSchema !== VISUAL_PRESET_SCHEMA) savedPreset = 5;
     return savedPreset;
   } catch (e) {
@@ -5222,7 +5224,7 @@ function readSavedLyricLayout() {
   try {
     var savedLayoutRaw = localStorage.getItem(LYRIC_LAYOUT_STORE_KEY);
     var raw = savedLayoutRaw ? (JSON.parse(savedLayoutRaw) || {}) : packagedDefaultLyricLayoutRaw();
-    var savedPreset = clampRange(Number(raw.preset) || 0, 0, presetMeta.length - 1);
+    var savedPreset = clampRange(Number(raw.preset) || 0, 0, 100); // fixed: presetMeta not defined yet at module init
     if (savedPreset === 3 && raw.visualPresetSchema !== VISUAL_PRESET_SCHEMA) {
       savedPreset = 5;
     }
@@ -13811,6 +13813,12 @@ function ensureHomeWallpaperParticles(opts) {
 }
 function activateHomeWallpaperPreview(opts) {
   opts = opts || {};
+  if (!homeVisualPresetActive && typeof playbackVisualPreset === 'number') {
+    homeVisualPrevPreset = playbackVisualPreset;
+  } else if (!homeVisualPresetActive && fx && typeof fx.preset === 'number') {
+    homeVisualPrevPreset = fx.preset;
+  }
+  homeVisualPresetActive = true;
   document.body.classList.add('home-wallpaper-preview');
   ensureHomeWallpaperParticles(opts);
 }
@@ -13849,16 +13857,21 @@ function switchPlaybackVisualToEmily() {
 }
 function applyStartupStarfieldPreset() {
   if (playing || currentIdx >= 0) return;
-  if (typeof playbackVisualPreset === 'number' && playbackVisualPreset !== 0 && playbackVisualPreset !== 5) {
+  var _startupPreset = playbackVisualPreset;
+  if ((_startupPreset === 0 || _startupPreset === 5) && typeof fx.preset === 'number' && fx.preset !== 0 && fx.preset !== 5 && fx.preset < presetMeta.length) {
+    _startupPreset = fx.preset;
+  }
+  if (typeof _startupPreset === 'number' && _startupPreset !== 0 && _startupPreset !== 5) {
     startupVisualPreviewActive = false;
-    var p = playbackVisualPreset;
+    var p = _startupPreset;
     if (typeof setPreset === 'function') setPreset(p, { silent: true, preserveCamera: false, skipTransition: true, noSave: true });
     if (typeof orbit !== 'undefined') {
-      var cam = {1:[6.2,0.03],2:[7.0,0.15],3:[8.0,0.05],4:[6.5,0.04],5:[6.6,0.08],6:[7.4,0.10],7:[7.5,0.35]};
+      var cam = {1:[6.2,0.03],2:[7.0,0.15],3:[8.0,0.05],4:[6.5,0.04],5:[6.6,0.08],6:[7.4,0.10],7:[6.6,0.08],8:[8.8,-0.22],9:[6.6,0.08],10:[7.5,0.15]};
       var c = cam[p] || [6.6, 0.08];
       orbit.userRadius = c[0]; orbit.userPhi = c[1]; orbit.userTheta = 0.0;
       orbit.baselineRadius = c[0]; orbit.baselinePhi = c[1]; orbit.baselineTheta = (p === 6) ? 0.18 : 0.0;
     }
+    if (typeof saveLyricLayout === 'function') saveLyricLayout();
     return;
   }
   startupVisualPreviewActive = true;
@@ -18258,7 +18271,7 @@ var presetMeta = [
   { name: '唱片', desc: '唱片 · 圆形封面' },
   { name: '星河', desc: '壁纸粒子 · 音乐律动' },
   { name: '安魂', desc: '骷髅·YUI7W', descHtml: '骷髅·<span class="pc-yui7w">YUI7W</span>' },
-  { name: '海啮', desc: '巨浮 · 液态山脉' },
+  { name: '海啸', desc: '巨浮 · 液态山脉' },
   { name: '龙卷风', desc: '涡旋 · 流体雕塑' },
   { name: '行星', desc: '星环 · 卫星环绕' },
   { name: '声境', desc: '3D 地形 · 频谱律动' },
@@ -20561,6 +20574,7 @@ function openWallpaperPicker() {
   var items = document.querySelectorAll('#wp-rating-menu .wp-rating-item');
   items.forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-rating') === wpRatingFilter); });
   refreshWallpapers();
+  setTimeout(ensureWpScrollBtn, 300);
 }
 function closeWallpaperPicker() {
   var modal = document.getElementById('wallpaper-picker-modal');
@@ -20695,11 +20709,11 @@ function renderWallpaperGrid() {
     });
   }
   // 按文件创建时间倒序排序（最新下载的在前），相同时间按文件夹名倒序（workshop ID 越大越新）
+  try {
   filtered = filtered.slice().sort(function(a, b) {
-    // 优先用创建时间（下载时间）
     // Fav first
-    var aF = isWpFav(a.folderPath || '');
-    var bF = isWpFav(b.folderPath || '');
+    var aF = typeof isWpFav === 'function' ? isWpFav(a.folderPath || '') : false;
+    var bF = typeof isWpFav === 'function' ? isWpFav(b.folderPath || '') : false;
     if (aF && !bF) return -1;
     if (!aF && bF) return 1;
     var ca = a.birthtimeMs || a.modifiedAt || 0;
@@ -20711,6 +20725,8 @@ function renderWallpaperGrid() {
     if (na < nb) return 1;
     return 0;
   });
+  } catch(e) { console.warn('[WP] sort error:', e); }
+
   console.log('[WP] sorted, first 3:', filtered.slice(0,3).map(function(w){return w.name+' @birth='+w.birthtimeMs+' mod='+w.modifiedAt}));
   statusEl.textContent = '共 ' + filtered.length + ' 个壁纸' + (wpRatingFilter !== 'all' ? '（已按分级筛选）' : '') + '，点击即可设为播放器背景。';
   gridEl.innerHTML = '';
@@ -20765,10 +20781,12 @@ function renderWallpaperGrid() {
     if (rating) tags.push(rating);
     sub.textContent = tags.join(' · ');
     name.appendChild(sub);
-    var fvBtn = document.createElement('button');
+    var fvBtn = null;
+    try {
+    fvBtn = document.createElement('button');
     fvBtn.className = 'wp-fav-btn';
     var fvFp = wp.folderPath || '';
-    var fv = isWpFav(fvFp);
+    var fv = typeof isWpFav === 'function' ? isWpFav(fvFp) : false;
     fvBtn.innerHTML = fv ? '\u2605' : '\u2606';
     fvBtn.title = fv ? '\u53d6\u6d88\u6536\u85cf' : '\u6536\u85cf';
     fvBtn.style.cssText = 'position:absolute;top:4px;right:4px;z-index:5;width:24px;height:24px;border:none;border-radius:50%;background:rgba(0,0,0,0.5);color:' + (fv ? '#ffc107' : '#fff') + ';font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;';
@@ -20781,7 +20799,8 @@ function renderWallpaperGrid() {
       renderWallpaperGrid();
     });
     card.style.position = 'relative';
-    card.appendChild(fvBtn);
+    } catch(e) { fvBtn = null; }
+    if (fvBtn) card.appendChild(fvBtn);
     card.appendChild(img);
     card.appendChild(name);
     card.addEventListener('click', function(){ console.log('[WP] card clicked:', wp.name); applyWallpaper(wp); });
@@ -20789,33 +20808,41 @@ function renderWallpaperGrid() {
   });
 }
 
+var _wpScrollBtnCreated = false;
 function ensureWpScrollBtn() {
   var g = document.getElementById('wp-grid');
   if (!g) return;
-  var b = document.getElementById('wp-scroll-top');
-  if (!b) {
-    b = document.createElement('button');
+  var scrollContainer = g.closest('.wallpaper-picker-dialog') || g;
+  // helper: check if scrolled enough (check both dialog and grid)
+  function _wpScrolled() {
+    return (scrollContainer.scrollTop > 200) || (g.scrollTop > 200);
+  }
+  // helper: scroll both containers to top
+  function _wpScrollToTop() {
+    [scrollContainer, g].forEach(function(el) {
+      if (el.scrollTo) el.scrollTo({ top: 0, behavior: 'smooth' });
+      else el.scrollTop = 0;
+    });
+  }
+  if (!_wpScrollBtnCreated) {
+    _wpScrollBtnCreated = true;
+    var b = document.createElement('button');
     b.id = 'wp-scroll-top';
+    b.className = 'wp-scroll-top-btn';
     b.textContent = '\u2191';
     b.title = '\u56de\u5230\u9876\u90e8';
-    b.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;width:40px;height:40px;border:none;border-radius:50%;background:rgba(91,141,239,0.85);color:#fff;font-size:20px;cursor:pointer;display:none;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(0,0,0,0.3);';
-    b.onmouseenter = function() { this.style.background = 'rgba(91,141,239,1)'; this.style.transform = 'scale(1.1)'; };
-    b.onmouseleave = function() { this.style.background = 'rgba(91,141,239,0.85)'; this.style.transform = 'scale(1)'; };
-    b.onclick = function() { if (g.scrollTo) g.scrollTo({ top: 0, behavior: 'smooth' }); else g.scrollTop = 0; };
+    b.style.cssText = 'position:fixed;bottom:44px;right:60px;z-index:9999;display:none;';
+    b.onclick = _wpScrollToTop;
     document.body.appendChild(b);
-    g.addEventListener('scroll', function() { b.style.display = g.scrollTop > 200 ? 'flex' : 'none'; });
-    b.style.display = g.scrollTop > 200 ? 'flex' : 'none';
+    // listen on both containers
+    var _wpScrollHandler = function() { b.style.display = _wpScrolled() ? 'flex' : 'none'; };
+    scrollContainer.addEventListener('scroll', _wpScrollHandler);
+    g.addEventListener('scroll', _wpScrollHandler);
+    // also re-check after grid content loads (delayed, since refreshWallpapers is async)
+    setTimeout(_wpScrollHandler, 1200);
   }
-}
-// Create scroll button once, show on wallpaper grid scroll
-// The button is created when ensureWpScrollBtn is called (by setTimeout on page load)
-// Show scroll button when wallpaper picker opens
-if (typeof openWallpaperPicker === 'function') {
-  var _origOWP = openWallpaperPicker;
-  openWallpaperPicker = function() {
-    _origOWP.apply(this, arguments);
-    setTimeout(ensureWpScrollBtn, 300);
-  };
+  var btn = document.getElementById('wp-scroll-top');
+  if (btn) btn.style.display = _wpScrolled() ? 'flex' : 'none';
 }
 function loadPreviewImage(img, filePath) {
   var api = window.desktopWindow;

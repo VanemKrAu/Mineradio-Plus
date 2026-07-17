@@ -1313,11 +1313,11 @@ body.desktop-shell.diy-mode #bottom-bar.stage-mode{left:50%;width:min(1080px,cal
 .wp-rating-item{display:block;width:100%;height:28px;border-radius:6px;border:none;background:transparent;color:rgba(255,255,255,.62);font:700 10.5px/1 var(--font-sans);cursor:pointer;padding:0 10px;text-align:left}
 .wp-rating-item:hover{background:rgba(255,255,255,.06);color:#fff}
 .wp-rating-item.active{background:rgba(var(--fc-accent-rgb),.14);color:var(--fc-accent)}
-.wp-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;padding:12px 0;overflow-y:auto;flex:1 1 auto;min-height:0}.wp-grid::-webkit-scrollbar{width:3px}.wp-grid::-webkit-scrollbar-thumb{background:rgba(var(--fc-accent-rgb),.24);border-radius:3px}@media (max-width:860px){.wp-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}@media (max-width:640px){.wp-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:460px){.wp-grid{grid-template-columns:1fr}}
+.wp-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;padding:12px 0;overflow-y:auto;flex:1 1 auto;min-height:200px}.wp-grid::-webkit-scrollbar{width:3px}.wp-grid::-webkit-scrollbar-thumb{background:rgba(var(--fc-accent-rgb),.24);border-radius:3px}@media (max-width:860px){.wp-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}@media (max-width:640px){.wp-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:460px){.wp-grid{grid-template-columns:1fr}}
 .wp-search-input{width:150px;height:26px;border-radius:7px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.03);color:rgba(255,255,255,.72);font:11px/1 var(--font-sans);padding:0 10px;outline:none;transition:border-color .15s;flex:none}
 .wp-search-input:focus{border-color:rgba(var(--fc-accent-rgb),.35)}
 .wp-search-input::placeholder{color:rgba(255,255,255,.30)}
-.wp-card{aspect-ratio:16/9;border-radius:18px;border:1px solid rgba(255,255,255,.08);overflow:hidden;cursor:pointer;position:relative;background:#111;transition:border-color .25s,box-shadow .25s;content-visibility:auto;contain-intrinsic-size:320px 180px}
+.wp-card{aspect-ratio:16/9;border-radius:18px;border:1px solid rgba(255,255,255,.08);overflow:hidden;cursor:pointer;position:relative;background:#111;transition:border-color .25s,box-shadow .25s}
 .wp-card:hover{border-color:rgba(var(--fc-accent-rgb),.40)}.wp-card:hover .wp-card-img{transform:scale(1.025);filter:brightness(1.08) saturate(1.06)}
 .wp-card.active{border-color:var(--fc-accent);box-shadow:0 0 0 2px var(--fc-accent),0 0 20px rgba(0,245,212,.18)}
 .wp-card-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;background:#1a1a1a;filter:brightness(.96) saturate(1.02);transition:transform .35s ease,filter .35s ease}
@@ -1965,4 +1965,36 @@ body.empty-home-active.lyric-animation-stage-on #lyric-viz-stage-host.active{dis
 .wp-fav-btn.active {
   color: #ffc107;
   background: rgba(255,193,7,0.2);
+}
+
+/* wp-scroll-top-btn — matches app glass button style */
+.wp-scroll-top-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  border: 1px solid rgba(var(--fc-accent-rgb), .34);
+  background: linear-gradient(145deg, rgba(var(--fc-accent-rgb), .14), rgba(var(--fc-accent-rgb), .06) 60%, rgba(0,0,0,.18));
+  backdrop-filter: blur(16px) saturate(1.12);
+  -webkit-backdrop-filter: blur(16px) saturate(1.12);
+  color: var(--fc-accent);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 780;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 28px rgba(0,0,0,.28), 0 0 0 1px rgba(var(--fc-accent-rgb), .06), inset 0 1px 0 rgba(255,255,255,.10);
+  transition: background .22s, border-color .22s, transform .22s, box-shadow .22s, color .22s;
+}
+.wp-scroll-top-btn:hover {
+  border-color: rgba(var(--fc-accent-rgb), .52);
+  background: linear-gradient(145deg, rgba(var(--fc-accent-rgb), .22), rgba(var(--fc-accent-rgb), .10) 60%, rgba(0,0,0,.14));
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 12px 34px rgba(0,0,0,.30), 0 0 18px rgba(var(--fc-accent-rgb), .10), inset 0 1px 0 rgba(255,255,255,.12);
+}
+.wp-scroll-top-btn:active {
+  transform: translateY(0) scale(.96);
+  box-shadow: 0 4px 14px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.08);
 }
