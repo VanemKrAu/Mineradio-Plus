@@ -772,6 +772,11 @@ function syncMediaSession(song, title, artist) {
   var album = (song.album || song.albumName || '') || '';
   var cover = song.cover || song.picUrl || song.albumCover || '';
   var token = ++mediaSessionCoverToken;
+  var lyricText = (typeof stageLyrics !== 'undefined' && stageLyrics && stageLyrics.currentText) || '';
+  if (lyricText) {
+    lyricText = String(lyricText).replace(/\s+/g, ' ').trim().substring(0, 30);
+    album = album ? (lyricText + ' · ' + album) : lyricText;
+  }
   var base = { title: title || ' ', artist: artist || ' ', album: album || ' ' };
   navigator.mediaSession.metadata = new MediaMetadata(base);
   navigator.mediaSession.playbackState = !!(audio && !audio.paused) ? 'playing' : 'paused';
@@ -817,6 +822,14 @@ function setupMediaSession() {
     if (e.target !== audio) return;
     updateMediaSessionPosition();
   }, true);
+  var lastLyricText = '';
+  setInterval(function () {
+    var currentLyric = (typeof stageLyrics !== 'undefined' && stageLyrics && stageLyrics.currentText) || '';
+    if (currentLyric !== lastLyricText) {
+      lastLyricText = currentLyric;
+      if (typeof syncTrayPlaybackState === 'function') syncTrayPlaybackState();
+    }
+  }, 500);
 }
 
 function setupTrayCommands() {
