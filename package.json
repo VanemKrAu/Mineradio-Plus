@@ -1,9 +1,9 @@
 {
-  "name": "mineradio",
-  "productName": "Mineradio",
-  "version": "2.0.2",
-  "description": "Windows 沉浸式音乐播放器，融合桌面模式、歌词舞台、粒子视觉和 3D 歌单架。",
-  "author": "Mineradio",
+  "name": "mineradio-plus",
+  "productName": "Mineradio+",
+  "version": "2.0.2-1",
+  "description": "Mineradio+ 个人修改增强版。沉浸式音乐播放器，融合天气电台、歌词舞台、粒子视觉和 3D 歌单架。",
+  "author": "VanemKrAu (https://github.com/VanemKrAu/Mineradio-Plus)",
   "license": "GPL-3.0-only",
   "main": "desktop/main.js",
   "private": true,
@@ -14,8 +14,8 @@
     "build:win:internal-beta": "electron-builder --config electron-builder.internal-beta.json --win nsis --publish never"
   },
   "build": {
-    "appId": "com.mineradio.desktop",
-    "productName": "Mineradio",
+    "appId": "com.mineradio-plus.desktop",
+    "productName": "Mineradio+",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -44,7 +44,7 @@
     ],
     "asar": false,
     "win": {
-      "executableName": "Mineradio",
+      "executableName": "Mineradio+",
       "icon": "build/icon.ico",
       "signAndEditExecutable": false,
       "target": [
@@ -62,28 +62,30 @@
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Mineradio",
+      "shortcutName": "Mineradio+",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "installerSidebar": "build/installerSidebar.bmp",
       "uninstallerSidebar": "build/installerSidebar.bmp",
       "installerHeader": "build/installerHeader.bmp",
       "include": "build/installer.nsh",
-      "artifactName": "Mineradio-${version}-Setup.${ext}"
+      "artifactName": "Mineradio+-${version}-Setup.${ext}"
     },
     "publish": [
       {
         "provider": "github",
-        "owner": "XxHuberrr",
-        "repo": "Mineradio"
+        "owner": "VanemKrAu",
+        "repo": "Mineradio-Plus"
       }
     ]
   },
   "mineradio": {
+    "runtimeName": "Mineradio+",
+    "appUserModelId": "com.mineradio-plus.desktop",
     "update": {
       "provider": "github",
-      "owner": "XxHuberrr",
-      "repo": "Mineradio",
+      "owner": "VanemKrAu",
+      "repo": "Mineradio-Plus",
       "preview": true,
       "preferMirrors": true,
       "mirrors": [

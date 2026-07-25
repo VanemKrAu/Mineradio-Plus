@@ -7270,6 +7270,30 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // ---------- 提取文件代理（供热评卡片 PKG 解包用）----------
+  if (pn === '/api/wallpaper/serve-extracted') {
+    var target = String(url.searchParams.get('path') || '');
+    if (!target) { sendJSON(res, { error: 'EMPTY_PATH' }, 400); return; }
+    if (target.indexOf('_repkg_cache') < 0) { sendJSON(res, { error: 'FORBIDDEN' }, 403); return; }
+    try {
+      var stat = fs.statSync(target);
+      if (!stat.isFile()) { sendJSON(res, { error: 'NOT_FOUND' }, 404); return; }
+      var ext = path.extname(target).toLowerCase();
+      var mime = { '.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.gif':'image/gif','.webp':'image/webp','.mp4':'video/mp4','.webm':'video/webm' }[ext] || 'application/octet-stream';
+      var total = stat.size;
+      var start = 0, end = total - 1, status = 200;
+      var range = req.headers.range || '';
+      var match = /^bytes=(\d*)-(\d*)$/.exec(range);
+      if (match) { start = match[1] ? Math.max(0, Number(match[1])) : 0; end = match[2] ? Math.min(end, Number(match[2])) : end; status = 206; }
+      var headers = { 'Content-Type': mime, 'Accept-Ranges': 'bytes', 'Access-Control-Allow-Origin': '*' };
+      headers['Content-Length'] = String(end - start + 1);
+      if (status === 206) headers['Content-Range'] = 'bytes ' + start + '-' + end + '/' + total;
+      res.writeHead(status, headers);
+      fs.createReadStream(target, { start, end }).pipe(res);
+    } catch (e) { sendJSON(res, { error: 'SERVE_FAILED' }, 500); }
+    return;
+  }
+
   // ---------- 静态资源 ----------
   if (pn === '/favicon.ico') {
     serveStatic(res, path.join(__dirname, 'build', 'icon.ico'));
