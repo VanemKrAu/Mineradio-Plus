@@ -760,8 +760,6 @@ function syncTrayPlaybackState() {
   syncMediaSession(song, title, artist);
 }
 
-var mediaSessionCoverToken = 0;
-
 function syncMediaSession(song, title, artist) {
   if (typeof navigator === 'undefined' || !navigator.mediaSession) return;
   if (!song) {
@@ -770,35 +768,24 @@ function syncMediaSession(song, title, artist) {
     return;
   }
   var album = (song.album || song.albumName || '') || '';
-  var cover = song.cover || song.picUrl || song.albumCover || '';
-  var token = ++mediaSessionCoverToken;
   var lyricText = (typeof stageLyrics !== 'undefined' && stageLyrics && stageLyrics.currentText) || '';
   if (lyricText) {
     lyricText = String(lyricText).replace(/\s+/g, ' ').trim().substring(0, 30);
     album = album ? (lyricText + ' · ' + album) : lyricText;
   }
-  var base = { title: title || ' ', artist: artist || ' ', album: album || ' ' };
-  navigator.mediaSession.metadata = new MediaMetadata(base);
-  navigator.mediaSession.playbackState = !!(audio && !audio.paused) ? 'playing' : 'paused';
-  updateMediaSessionPosition();
-  if (cover && cover.indexOf('://') > 0) {
-    var controller = new AbortController();
-    var timer = setTimeout(function () { controller.abort(); }, 5000);
-    fetch(cover, { mode: 'cors', signal: controller.signal }).then(function (r) {
-      clearTimeout(timer);
-      if (!r.ok) return null;
-      return r.blob();
-    }).then(function (blob) {
-      if (!blob || token !== mediaSessionCoverToken) return;
-      var reader = new FileReader();
-      reader.onloadend = function () {
-        if (token !== mediaSessionCoverToken) return;
-        var full = { title: base.title, artist: base.artist, album: base.album, artwork: [{ src: reader.result, sizes: '512x512', type: blob.type || 'image/jpeg' }] };
-        navigator.mediaSession.metadata = new MediaMetadata(full);
-      };
-      reader.readAsDataURL(blob);
-    }).catch(function () {});
-  }
+  var coverUrl = (typeof songCoverSrc === 'function') ? songCoverSrc(song, 300) : (song.cover || song.picUrl || song.albumCover || '');
+  var artwork = [];
+  if (coverUrl) artwork.push({ src: coverUrl, sizes: '300x300', type: 'image/jpeg' });
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: title || ' ',
+      artist: artist || ' ',
+      album: album || ' ',
+      artwork: artwork
+    });
+    navigator.mediaSession.playbackState = !!(audio && !audio.paused) ? 'playing' : 'paused';
+    updateMediaSessionPosition();
+  } catch (_e) {}
 }
 
 function updateMediaSessionPosition() {
@@ -809,15 +796,27 @@ function updateMediaSessionPosition() {
 
 function setupMediaSession() {
   if (typeof navigator === 'undefined' || !navigator.mediaSession) return;
-  navigator.mediaSession.setActionHandler('play', function () { if (typeof togglePlay === 'function') togglePlay(); });
-  navigator.mediaSession.setActionHandler('pause', function () { if (typeof togglePlay === 'function') togglePlay(); });
-  navigator.mediaSession.setActionHandler('previoustrack', function () { if (typeof prevTrack === 'function') prevTrack(true); });
-  navigator.mediaSession.setActionHandler('nexttrack', function () { if (typeof nextTrack === 'function') nextTrack(true); });
-  navigator.mediaSession.setActionHandler('seekto', function (details) {
-    if (details && isFinite(details.seekTime) && audio && typeof audio.currentTime !== 'undefined') {
-      audio.currentTime = details.seekTime;
-    }
-  });
+  var actions = {
+    play: function () { if (typeof togglePlay === 'function') togglePlay(); },
+    pause: function () { if (typeof togglePlay === 'function') togglePlay(); },
+    previoustrack: function () { if (typeof prevTrack === 'function') prevTrack(true); },
+    nexttrack: function () { if (typeof nextTrack === 'function') nextTrack(true); },
+    seekforward: function () {
+      if (audio && isFinite(audio.duration)) audio.currentTime = Math.min(audio.duration, (audio.currentTime || 0) + 10);
+    },
+    seekbackward: function () {
+      if (audio) audio.currentTime = Math.max(0, (audio.currentTime || 0) - 10);
+    },
+    seekto: function (details) {
+      if (details && isFinite(details.seekTime) && audio && typeof audio.currentTime !== 'undefined') {
+        audio.currentTime = details.seekTime;
+      }
+    },
+  };
+  for (var action in actions) {
+    try { navigator.mediaSession.setActionHandler(action, actions[action]); }
+    catch (_e) {}
+  }
   document.addEventListener('timeupdate', function (e) {
     if (e.target !== audio) return;
     updateMediaSessionPosition();
