@@ -370,6 +370,7 @@ async function completeAudioPlayStart(opts, reason, expectedMedia, expectedToken
   if (!playbackAttemptStillCurrent(expectedMedia, expectedToken)) return false;
   switchPlaybackVisualToEmily();
   playing = true; setPlayIcon(true);
+  syncTrayPlaybackState();
   if (typeof markStageLyricsPlaybackResume === 'function') markStageLyricsPlaybackResume(reason || 'playback-started');
   if (opts.trackSwitch) primeCinemaAfterTrackStart(reason || 'track-switch');
   if (opts.trackSwitch && !opts.resumeRecovery && typeof resetPlaybackFreshUrlRecoveryBudget === 'function') {
@@ -428,6 +429,7 @@ async function resumePausedAudioFast(opts) {
     if (!isSameAudioPlaybackTarget(media, src) || token !== trackSwitchToken) return false;
     switchPlaybackVisualToEmily();
     playing = true; setPlayIcon(true);
+    syncTrayPlaybackState();
     if (typeof markStageLyricsPlaybackResume === 'function') {
       setTimeout(function () {
         if (isSameAudioPlaybackTarget(media, src) && token === trackSwitchToken && !media.paused && !media.ended) {
@@ -585,6 +587,7 @@ async function togglePlay() {
     if (!audio || !audio.src) showToast('播放控制失败');
   } finally {
     playToggleBusy = false;
+    syncTrayPlaybackState();
   }
 }
 function setPlayIcon(p) {
@@ -640,14 +643,14 @@ function nextTrack(userInitiated) {
       var tailOpts = userInitiated ? { manual: true, suppressPlayFailureNotice: true } : { suppressPlayFailureNotice: true };
       if (playMode === 'shuffle') tailOpts.skipShuffleOrder = true;
       return playQueueAt(currentIdx, tailOpts);
-    }).finally(forcePlaybackControlsInteractive);
+    }).finally(function () { forcePlaybackControlsInteractive(); syncTrayPlaybackState(); });
     return;
   }
   if (playMode === 'shuffle') currentIdx = currentIdx < 0 ? 0 : (currentIdx + 1) % playQueue.length;
   else currentIdx = (currentIdx + 1) % playQueue.length;
   var opts = userInitiated ? { manual: true, suppressPlayFailureNotice: true } : { suppressPlayFailureNotice: true };
   if (playMode === 'shuffle') opts.skipShuffleOrder = true;
-  Promise.resolve(playQueueAt(currentIdx, opts)).finally(forcePlaybackControlsInteractive);
+  Promise.resolve(playQueueAt(currentIdx, opts)).finally(function () { forcePlaybackControlsInteractive(); syncTrayPlaybackState(); });
 }
 function prevTrack(userInitiated) {
   if (!playQueue.length) return;
@@ -656,7 +659,7 @@ function prevTrack(userInitiated) {
   currentIdx = (currentIdx - 1 + playQueue.length) % playQueue.length;
   var opts = userInitiated ? { manual: true, suppressPlayFailureNotice: true } : { suppressPlayFailureNotice: true };
   if (playMode === 'shuffle') opts.skipShuffleOrder = true;
-  Promise.resolve(playQueueAt(currentIdx, opts)).finally(forcePlaybackControlsInteractive);
+  Promise.resolve(playQueueAt(currentIdx, opts)).finally(function () { forcePlaybackControlsInteractive(); syncTrayPlaybackState(); });
 }
 function shuffleQueue() {
   reorderQueueForShufflePlaybackOrder(currentIdx, { reason: 'shuffle-queue' });
@@ -745,3 +748,38 @@ function cyclePlayMode() {
   showToast('播放模式: ' + playModeLabel(playMode));
 }
 updatePlayModeButton(false);
+
+function syncTrayPlaybackState() {
+  var song = (Array.isArray(playQueue) && currentIdx >= 0 && currentIdx < playQueue.length) ? playQueue[currentIdx] : null;
+  var title = (song && (song.name || song.title || '')) || '';
+  var artist = (song && (song.artist || '')) || '';
+  var desktopApi = window.desktopWindow;
+  if (desktopApi && typeof desktopApi.updateTrayPlayback === 'function') {
+    desktopApi.updateTrayPlayback({ title: title, artist: artist, playing: !!(audio && !audio.paused), volume: typeof targetVolume !== 'undefined' ? targetVolume : 1 });
+  }
+}
+
+function setupTrayCommands() {
+  var desktopApi = window.desktopWindow;
+  if (desktopApi && typeof desktopApi.onTrayCommand === 'function') {
+    desktopApi.onTrayCommand(function (command) {
+      if (!command || !command.action) return;
+      switch (command.action) {
+        case 'togglePlay': togglePlay(); break;
+        case 'nextTrack': nextTrack(true); break;
+        case 'prevTrack': prevTrack(true); break;
+        case 'volumeUp': setVolume((typeof targetVolume !== 'undefined' ? targetVolume : 0.8) + 0.1); break;
+        case 'volumeDown': setVolume((typeof targetVolume !== 'undefined' ? targetVolume : 0.8) - 0.1); break;
+        case 'toggleMute': toggleMute(); break;
+      }
+    });
+  }
+}
+
+(function bootTray() {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupTrayCommands);
+  } else {
+    setupTrayCommands();
+  }
+})();

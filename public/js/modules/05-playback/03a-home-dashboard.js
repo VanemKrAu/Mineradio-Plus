@@ -435,7 +435,7 @@ function renderHomeDashboardHero() {
       '<div class="daily-review-actions">' +
       '<button type="button" onclick="homeDashboardNextReview()">换一条</button>' +
       '<button id="home-dashboard-video-choose" type="button" onclick="openHomeDashboardVideoPicker()">选择 MP4</button>' +
-      '<button type="button" onclick="openWallpaperEngineLibrary()" title="从 Wallpaper Engine 壁纸库导入">壁纸视频</button>' +
+      '<button type="button" onclick="openWeForDailyReviewVideo()" title="从 Wallpaper Engine 壁纸库导入">壁纸视频</button>' +
       '<button id="home-dashboard-video-clear" type="button" onclick="clearHomeDashboardVideo()" hidden>移除视频</button>' +
       '<button type="button" onclick="openHomePlayerConsole()">展开播放器控制台</button>' +
       '</div></div>' +

@@ -81,6 +81,8 @@ let appQuitCleanupPromise = null;
 let appQuitCleanupComplete = false;
 let mainWindowCloseFlushArmed = false;
 let tray = null;
+let trayPlaybackState = { title: '', artist: '', playing: false, volume: 100 };
+let startupLaunchEnabled = false;
 let startupCompleted = false;
 let startupErrorReported = false;
 let localServerStartPromise = null;
@@ -2034,6 +2036,12 @@ function focusMainWindow() {
   return true;
 }
 
+function traySendCommand(command) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('mineradio-tray-command', command);
+  }
+}
+
 function createOrUpdateTray() {
   if (process.platform !== 'win32' && process.platform !== 'linux') return;
   if (!tray) {
@@ -2048,15 +2056,69 @@ function createOrUpdateTray() {
       return;
     }
   }
+  var state = trayPlaybackState;
+  var titleMaxLen = 80;
+  var songLabel = '未在播放';
+  if (state.title || state.artist) {
+    var parts = [];
+    if (state.title) parts.push(state.title);
+    if (state.artist) parts.push(state.artist);
+    songLabel = parts.join(' — ');
+    if (songLabel.length > titleMaxLen) songLabel = songLabel.slice(0, titleMaxLen - 1) + '…';
+  }
+  var volumePct = Math.round(Math.max(0, Math.min(1, state.volume || 0)) * 100);
+  var volumeLabel = volumePct > 0 ? '音量: ' + volumePct + '%' : '静音';
   const desktopMode = fullDesktopModeRuntime.getStatus('tray-menu');
-  const menu = Menu.buildFromTemplate([
-    { label: `显示 ${APP_NAME}`, click: () => focusMainWindow() },
+  var menu = Menu.buildFromTemplate([
+    { label: songLabel, enabled: false },
+    { type: 'separator' },
+    {
+      label: state.playing ? '暂停' : '播放',
+      click: () => traySendCommand({ action: 'togglePlay' }),
+    },
+    { label: '下一曲', click: () => traySendCommand({ action: 'nextTrack' }) },
+    { label: '上一曲', click: () => traySendCommand({ action: 'prevTrack' }) },
+    { type: 'separator' },
+    {
+      label: '音量 +10%',
+      click: () => traySendCommand({ action: 'volumeUp', delta: 0.1 }),
+    },
+    {
+      label: '音量 -10%',
+      click: () => traySendCommand({ action: 'volumeDown', delta: -0.1 }),
+    },
+    {
+      label: volumePct > 0 ? '静音' : '取消静音',
+      click: () => traySendCommand({ action: 'toggleMute' }),
+    },
+    { label: volumeLabel, enabled: false },
+    { type: 'separator' },
+    { label: '显示 ' + APP_NAME, click: () => focusMainWindow() },
     {
       label: '退出完整桌面模式',
       visible: desktopMode.enabled === true,
-      click: () => disableFullDesktopMode('tray-exit-desktop-mode').catch((error) => {
+      click: () => disableFullDesktopMode('tray-exit-desktop-mode').catch(function (error) {
         console.warn('[FullDesktopMode] tray exit failed:', error && error.message || error);
       }),
+    },
+    { type: 'separator' },
+    {
+      label: '关闭到托盘',
+      type: 'checkbox',
+      checked: closeBehavior === 'tray',
+      click: function (menuItem) {
+        closeBehavior = menuItem.checked ? 'tray' : 'exit';
+      },
+    },
+    {
+      label: '开机自启',
+      type: 'checkbox',
+      checked: startupLaunchEnabled,
+      click: function (menuItem) {
+        startupLaunchEnabled = menuItem.checked;
+        try { app.setLoginItemSettings({ openAtLogin: startupLaunchEnabled }); }
+        catch (e) { console.warn('[Tray] setLoginItemSettings failed:', e.message); }
+      },
     },
     { type: 'separator' },
     {
@@ -4692,6 +4754,32 @@ ipcMain.handle('mineradio-memory-purge-system', async (_event, payload = {}) => 
       systemPurgeEnabled: systemMemory.SYSTEM_PURGE_ENABLED === true,
     };
   }
+});
+
+// --- Tray IPC ---
+ipcMain.handle('mineradio-tray-get-settings', async () => {
+  return { closeToTray: closeBehavior === 'tray', startup: startupLaunchEnabled };
+});
+ipcMain.handle('mineradio-tray-set-close-to-tray', async (_event, enabled) => {
+  closeBehavior = enabled ? 'tray' : 'exit';
+  if (tray) createOrUpdateTray();
+  return { ok: true };
+});
+ipcMain.handle('mineradio-tray-update-playback', async (_event, state) => {
+  if (state) {
+    if (typeof state.title === 'string') trayPlaybackState.title = state.title;
+    if (typeof state.artist === 'string') trayPlaybackState.artist = state.artist;
+    if (typeof state.playing === 'boolean') trayPlaybackState.playing = state.playing;
+    if (typeof state.volume === 'number') trayPlaybackState.volume = state.volume;
+  }
+  if (tray) createOrUpdateTray();
+  return { ok: true };
+});
+ipcMain.handle('mineradio-tray-set-startup-launch', async (_event, enabled) => {
+  startupLaunchEnabled = !!enabled;
+  try { app.setLoginItemSettings({ openAtLogin: startupLaunchEnabled }); }
+  catch (e) { console.warn('[Tray] setLoginItemSettings failed:', e.message); }
+  return { ok: true };
 });
 
 // --- PKG extraction for daily review ---

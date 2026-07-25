@@ -1,5 +1,4 @@
 var WALLPAPER_ENGINE_SELECTION_STORE_KEY = 'mineradio-wallpaper-engine-selection-v1';
-var WALLPAPER_ENGINE_HIDDEN_STORE_KEY = 'mineradio-wallpaper-engine-hidden-v1';
 var WALLPAPER_ENGINE_FAVORITE_STORE_KEY = 'mineradio-wallpaper-engine-favorites-v1';
 var wallpaperEngineProjects = [];
 var wallpaperEngineLibrarySnapshot = null;
@@ -135,7 +134,6 @@ function readWallpaperEngineIdSet(key) {
   }
 }
 
-var hiddenWallpaperEngineIds = readWallpaperEngineIdSet(WALLPAPER_ENGINE_HIDDEN_STORE_KEY);
 var favoriteWallpaperEngineIds = readWallpaperEngineIdSet(WALLPAPER_ENGINE_FAVORITE_STORE_KEY);
 
 function saveWallpaperEngineIdSet(key, values) {
@@ -1793,9 +1791,7 @@ function wallpaperEngineFilteredProjects() {
     if (fa !== fb) return fb - fa;
     var ua = Number(a.updatedAt) || 0, ub = Number(b.updatedAt) || 0;
     if (ua !== ub) return ub - ua;
-    var ta = (a.title || '').toLowerCase(), tb = (b.title || '').toLowerCase();
-    if (ta > tb) return -1;
-    if (ta < tb) return 1;
+    return 0;
   });
 }
 
@@ -2311,24 +2307,6 @@ function toggleFavoriteWallpaperEngineItem(id) {
   else favoriteWallpaperEngineIds.add(id);
   saveWallpaperEngineIdSet(WALLPAPER_ENGINE_FAVORITE_STORE_KEY, favoriteWallpaperEngineIds);
   renderWallpaperEngineLibrary();
-}
-
-function hideWallpaperEngineItem(id) {
-  id = String(id || '');
-  hiddenWallpaperEngineIds.add(id);
-  saveWallpaperEngineIdSet(WALLPAPER_ENGINE_HIDDEN_STORE_KEY, hiddenWallpaperEngineIds);
-  renderWallpaperEngineLibrary();
-}
-
-function restoreHiddenWallpaperEngineItems() {
-  if (!hiddenWallpaperEngineIds.size) {
-    showToast('没有已隐藏的壁纸');
-    return;
-  }
-  hiddenWallpaperEngineIds.clear();
-  saveWallpaperEngineIdSet(WALLPAPER_ENGINE_HIDDEN_STORE_KEY, hiddenWallpaperEngineIds);
-  renderWallpaperEngineLibrary();
-  showToast('已恢复全部隐藏壁纸');
 }
 
 function bindWallpaperEngineLibraryEvents() {

@@ -41,6 +41,16 @@ contextBridge.exposeInMainWorld('desktopWindow', {
   },
   extractWallpaperScene: (folderPath) => ipcRenderer.invoke('mineradio-wallpaper-extract-scene', String(folderPath || '')),
   readWallpaperFile: (filePath) => ipcRenderer.invoke('mineradio-wallpaper-read-file', String(filePath || '')),
+  getTraySettings: () => ipcRenderer.invoke('mineradio-tray-get-settings'),
+  setCloseToTray: (enabled) => ipcRenderer.invoke('mineradio-tray-set-close-to-tray', !!enabled),
+  setStartupEnabled: (enabled) => ipcRenderer.invoke('mineradio-tray-set-startup-launch', !!enabled),
+  updateTrayPlayback: (state) => ipcRenderer.invoke('mineradio-tray-update-playback', state || {}),
+  onTrayCommand: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload || {});
+    ipcRenderer.on('mineradio-tray-command', listener);
+    return () => ipcRenderer.removeListener('mineradio-tray-command', listener);
+  },
   readLyricCache: (key) => ipcRenderer.invoke('mineradio-cache-read-lyric', key || ''),
   writeLyricCache: (key, payload) => ipcRenderer.invoke('mineradio-cache-write-lyric', key || '', payload || {}),
   close: (behavior) => ipcRenderer.invoke('desktop-window-close', behavior),

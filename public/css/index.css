@@ -12296,8 +12296,7 @@ body.desktop-shell.diy-mode #bottom-bar.stage-mode {
 }
 
 .wallpaper-engine-card-star,
-.wallpaper-engine-card-settings,
-.wallpaper-engine-card-hide {
+.wallpaper-engine-card-settings {
   position: absolute;
   top: 7px;
   z-index: 3;
@@ -12312,11 +12311,9 @@ body.desktop-shell.diy-mode #bottom-bar.stage-mode {
 }
 
 .wallpaper-engine-card-star { left: 7px; font-size: 16px }
-.wallpaper-engine-card-settings { right: 41px; font-size: 13px }
-.wallpaper-engine-card-hide { right: 7px; font-size: 15px }
+.wallpaper-engine-card-settings { right: 7px; font-size: 13px }
 .wallpaper-engine-card-star.active { color: #ffd76c; border-color: rgba(255, 215, 108, .46) }
 .wallpaper-engine-card-settings:hover { color: #dff4ff; background: rgba(40, 131, 194, .72) }
-.wallpaper-engine-card-hide:hover { color: #fff; background: rgba(157, 39, 55, .76) }
 
 .wallpaper-engine-details-drawer {
   position: absolute;

@@ -488,10 +488,12 @@ async function indexProject(projectRoot, source, scenePackageOverride = '') {
     mutedAudioPropertyCount: 0,
   };
   const workshopId = deriveWorkshopId(project, projectRoot, source.kind);
+  const folderStat = await fs.promises.stat(projectRoot).catch(function () { return null; });
   return {
     item: {
       id,
       title: sanitizeText(project.title, path.basename(projectRoot)),
+      originalName: path.basename(projectRoot),
       projectType: safeProjectType,
       mediaType,
       mediaAnimated: mediaExt === '.gif',
@@ -503,12 +505,13 @@ async function indexProject(projectRoot, source, scenePackageOverride = '') {
       source: source.kind,
       sourceLabel: source.label,
       workshopId,
-      folderPath: record.projectRoot,
+      folderPath: projectRoot,
       propertyCount: propertyAnalysis.propertyCount,
       audioPropertyCount: propertyAnalysis.audioPropertyCount,
       mutedAudioPropertyCount: propertyAnalysis.mutedAudioPropertyCount,
-      updatedAt: Math.round(Number(manifest.stat.mtimeMs) || 0),
+      updatedAt: Math.round(Number(folderStat && folderStat.birthtimeMs) || Number(folderStat && folderStat.mtimeMs) || Number(manifest.stat.mtimeMs) || 0),
       safetyMode: media ? 'direct-media' : (enginePlayable ? 'native-engine' : 'preview-only'),
+      contentRating: String(project.contentrating || 'Everyone').trim(),
     },
     record: {
       id,
@@ -518,7 +521,7 @@ async function indexProject(projectRoot, source, scenePackageOverride = '') {
       preview,
       scenePackage,
       workshopId,
-      folderPath: record.projectRoot,
+      folderPath: projectRoot,
     },
   };
 }

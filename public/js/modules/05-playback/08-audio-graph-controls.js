@@ -613,6 +613,7 @@ function setVolume(value, silent) {
   applyVolumeToAudio({ restoreEnvelope: shouldRestoreAudibleEnvelope });
   updateVolumeUi();
   if (!silent) showToast('音量 ' + Math.round(next * 100) + '%');
+  if (typeof syncTrayPlaybackState === 'function') syncTrayPlaybackState();
 }
 function adjustVolumeByKeyboard(delta) {
   var step = Number(delta) || 0;
@@ -683,6 +684,7 @@ function setVolumePanelSiblingSuppressed(suppressed) {
 
 function toggleMute() {
   setVolume(targetVolume > 0.01 ? 0 : (lastNonZeroVolume || 0.8));
+  if (typeof syncTrayPlaybackState === 'function') syncTrayPlaybackState();
 }
 
 function bindVolumeControls() {
