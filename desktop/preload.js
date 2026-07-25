@@ -39,6 +39,8 @@ contextBridge.exposeInMainWorld('desktopWindow', {
     ipcRenderer.on('mineradio-wallpaper-engine-host-bounds-changed', listener);
     return () => ipcRenderer.removeListener('mineradio-wallpaper-engine-host-bounds-changed', listener);
   },
+  extractWallpaperScene: (folderPath) => ipcRenderer.invoke('mineradio-wallpaper-extract-scene', String(folderPath || '')),
+  readWallpaperFile: (filePath) => ipcRenderer.invoke('mineradio-wallpaper-read-file', String(filePath || '')),
   readLyricCache: (key) => ipcRenderer.invoke('mineradio-cache-read-lyric', key || ''),
   writeLyricCache: (key, payload) => ipcRenderer.invoke('mineradio-cache-write-lyric', key || '', payload || {}),
   close: (behavior) => ipcRenderer.invoke('desktop-window-close', behavior),

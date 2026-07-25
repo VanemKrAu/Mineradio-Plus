@@ -503,6 +503,7 @@ async function indexProject(projectRoot, source, scenePackageOverride = '') {
       source: source.kind,
       sourceLabel: source.label,
       workshopId,
+      folderPath: record.projectRoot,
       propertyCount: propertyAnalysis.propertyCount,
       audioPropertyCount: propertyAnalysis.audioPropertyCount,
       mutedAudioPropertyCount: propertyAnalysis.mutedAudioPropertyCount,
@@ -517,6 +518,7 @@ async function indexProject(projectRoot, source, scenePackageOverride = '') {
       preview,
       scenePackage,
       workshopId,
+      folderPath: record.projectRoot,
     },
   };
 }
@@ -813,6 +815,7 @@ class WallpaperEngineLibrary {
       title: sanitizeText(project.title, path.basename(record.projectRoot)),
       projectType: String(project.type || 'unknown').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 32) || 'unknown',
       workshopId,
+      folderPath: record.projectRoot,
       propertyCount: propertyAnalysis.propertyCount,
       audioPropertyCount: propertyAnalysis.audioPropertyCount,
       mutedAudioPropertyCount: propertyAnalysis.mutedAudioPropertyCount,

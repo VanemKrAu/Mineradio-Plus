@@ -6,6 +6,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { execFile, spawn } = require('child_process');
 const systemMemory = require('./system-memory');
+const wallpaperScanner = require('./wallpaper-scanner');
 const {
   WallpaperEngineLibrary,
   registerWallpaperEngineScheme,
@@ -4691,6 +4692,28 @@ ipcMain.handle('mineradio-memory-purge-system', async (_event, payload = {}) => 
       systemPurgeEnabled: systemMemory.SYSTEM_PURGE_ENABLED === true,
     };
   }
+});
+
+// --- PKG extraction for daily review ---
+ipcMain.handle('mineradio-wallpaper-extract-scene', async (_event, folderPath) => {
+  try { return wallpaperScanner.extractWallpaperScene(folderPath); }
+  catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.handle('mineradio-wallpaper-read-file', async (_event, filePath) => {
+  try {
+    if (!filePath || !fs.existsSync(filePath)) return { ok: false, error: 'FILE_NOT_FOUND' };
+    var stat = fs.statSync(filePath);
+    if (!stat.isFile()) return { ok: false, error: 'NOT_A_FILE' };
+    var ext = path.extname(filePath).toLowerCase();
+    var mime = { '.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.mp4':'video/mp4','.webm':'video/webm' }[ext] || 'application/octet-stream';
+    if (stat.size > 50 * 1024 * 1024) {
+      var proxyUrl = 'http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/wallpaper/serve-extracted?path=' + encodeURIComponent(path.resolve(filePath));
+      return { ok: true, dataUrl: proxyUrl, proxy: true };
+    }
+    var data = fs.readFileSync(filePath);
+    return { ok: true, dataUrl: 'data:' + mime + ';base64,' + data.toString('base64') };
+  } catch (e) { return { ok: false, error: e.message }; }
 });
 
 ipcMain.handle('mineradio-cache-get-settings', async () => {
