@@ -1,89 +1,121 @@
-# Mineradio+
+<h1 align="center">Mineradio+</h1>
 
-![Mineradio+ 暗场启动页](./docs/assets/readme/cinema-beat-smoke.png)
+> **个人修改版** — 基于 [Mineradio](https://github.com/XxHuberrr/Mineradio) v2.0.2（GPL-3.0）修改。
+>
+> ⚠️ 本项目为个人修改版，仅根据 **本人使用习惯和审美** 进行调整，与他人无关，非官方发布。
+>
+> 如需原版请访问：[github.com/XxHuberrr/Mineradio](https://github.com/XxHuberrr/Mineradio)
 
-Mineradio+ 是基于 Mineradio v2.0.2 的个人修改增强版。沉浸式音乐播放器，融合天气电台、歌词舞台、粒子视觉和 3D 歌单架。
+<p align="center">
+  <img src="./build/icon.svg" width="256" height="256" alt="Mineradio+" />
+</p>
 
-## 立即下载 Windows 安装包
+## ✨ 本版改动（v2.0.2-1）
 
-| 下载入口 | 推荐人群 | 链接 |
-| --- | --- | --- |
-| GitHub Release | 所有用户 | [Mineradio+ 2.0.2-1 Release](https://github.com/VanemKrAu/Mineradio-Plus/releases/tag/v2.0.2-1) |
+> 基于原版 v2.0.2 模块化架构重构，前端拆分为 110+ 模块文件。
 
-安装时只需要下载并运行 `Mineradio+-2.0.2-1-Setup.exe`。不要把 `.blockmap`、`latest.yml` 或 `win-unpacked` 当成正式安装包。
+### 🖼 热评卡片壁纸视频导入
 
-## 下载或安装被拦截怎么办
+- 从 WE 壁纸库选择壁纸，自动 PKG 解包提取视频或纹理
+- 裁切对话框（Canvas 实时预览 + 拖拽定位 + 缩放滑块），宽高比按热评卡片实际尺寸计算
+- 视频/图片自动识别分支处理，IndexedDB 存储 blob，localStorage 存元数据
+- 非 PKG 壁纸直接读取媒体文件，PKG 壁纸使用 RePKG 解包提取
+- 单层纹理 → 提取图片；有视频 → 提取视频；多层纹理 → 提示暂不支持
 
-小众 Electron 桌面软件、未签名安装包有时会被浏览器、Windows Defender 或 SmartScreen 提示风险。请先确认安装包来自上面的 GitHub Release 官方入口，文件名是 `Mineradio+-2.0.2-1-Setup.exe`。
+### 📦 PKG 解包提取
 
-1. 浏览器下载栏提示风险时，打开下载列表，点这条下载右侧的 `...` 三个点，选择 `保留` / `仍要保留` / `显示更多` 后继续保留。
-2. Windows SmartScreen 弹出蓝色拦截窗口时，点 `更多信息`，再点 `仍要运行`。
-3. 如果杀毒软件明确显示木马、高危或已经隔离，不要强行运行；删除该文件后重新从 GitHub Release 下载，仍然异常请带截图反馈给作者。
+- 集成 RePKG，自动解包 scene.pkg 提取 MP4 视频或单层纹理图片
+- 缓存机制：`_repkg_cache/.done` 标记，避免重复解包
+- 大文件（>50MB）通过 HTTP Range 请求流式代理，不阻塞主进程
+- 路径安全检查，仅允许 `_repkg_cache` 目录内的文件访问
 
-## 当前版本
+### 🔞 年龄分级筛选
 
-当前版本：`2.0.2-1`
+- WE 壁纸库工具栏新增下拉筛选（全部/全年龄/可疑/成人）
+- 选择持久化到 localStorage，下次打开自动恢复
+- 后端读取 `project.json` 的 `contentrating` 字段，前端卡片显示分级标签
 
-状态：Mineradio+ 基于 Mineradio v2.0.2 的修改版。
+### 🎛 托盘功能增强
 
-## 核心特性
+- 当前歌曲信息显示（标题 + 歌手，截断 80 字符）
+- 播放/暂停、上一曲、下一曲控制
+- 音量 +10% / -10% / 静音切换
+- 关闭到托盘（checkbox）、开机自启（checkbox）
 
-- 多平台音乐搜索与播放 — 网易云音乐、QQ 音乐、酷狗音乐、汽水音乐聚合搜索，自动换源
-- 扫码登录 — 网易云 / QQ / 酷狗 / 汽水扫码登录，cookie 持久化
-- 歌词舞台 — 粒子歌词、3D 空间歌词、桌面歌词、歌词翻译与动画
-- 视觉效果 — 粒子系统、节拍分析、GLSL 着色器、自定义背景
-- 桌面壁纸模式 — 把播放器嵌入 Windows 桌面（WorkerW/全桌面模式）
-- Wallpaper Engine 集成 — 本地索引场景项目，DWM 零拷贝实时渲染，PKG 纹理解包
-- 热评卡片壁纸视频导入 — 从 WE 壁纸库选择壁纸，自动 PKG 解包提取视频或纹理，裁切后设为每日热评背景
-- 年龄分级筛选 — WE 壁纸库支持按内容分级（全年龄/可疑/成人）筛选，选择持久化
-- 3D 歌单架 — 歌单管理、智能推荐、播客
-- EQ 均衡器 — 6 频段 + 12 预设
-- 托盘增强 — 当前歌曲信息、播放控制、音量调节、开机自启开关
+### 🗂 壁纸排序
 
-## 使用说明
+- 收藏置顶 → 创建时间倒序
 
-Windows 用户可以在 GitHub Releases 中下载安装包。
+### 其他修改
 
-正式分发以 `Mineradio+-2.0.2-1-Setup.exe` 为准，不建议直接使用 `win-unpacked` 目录。安装包会创建桌面快捷方式。
+- 应用名称改为 Mineradio+，版本号 2.0.2-1
+- 安装包名改为 `Mineradio+-{version}-Setup.exe`
+- GitHub 仓库指向 VanemKrAu/Mineradio-Plus
+- 移除壁纸库「隐藏壁纸」按钮及相关功能
 
-## 开发运行
+## 原版核心特性
+
+Mineradio 是一款 Windows 桌面沉浸式音乐播放器，天气电台、搜索播放、歌词舞台、粒子视觉和 3D 歌单架组合成一个更接近现场感的私人音乐空间。
+
+- 首页包含天气电台、每日推荐、私人电台、继续听、听歌画像和我的歌单入口
+- 完整桌面模式保留播放器、主页、歌单和桌面交互
+- 支持本地 MP4 与 Wallpaper Engine 视觉内容
+- 播放后切换到 Emily / 默认播放态视觉，歌词舞台与粒子舞台同步工作
+- 基于节奏的电影镜头视觉系统
+- 面向长播客和 DJ 曲目的专属视觉模式
+- 歌词舞台、自定义歌词、歌词位置与视觉控制
+- 自定义专辑封面上传与裁剪
+- 右键唤起 3D 歌单架，支持歌单队列浏览
+- 多平台登录：网易云 / QQ 音乐 / 酷狗音乐 / 汽水音乐 / Spotify
+- 多平台搜索与播放，自动换源
+- GitHub Releases 更新检测与下载入口
+
+## 构建安装包
 
 ```bash
 npm install
-npm start
-npm run build:win
+npm start        # 开发运行
+npm run build:win  # 打包 NSIS 安装包
 ```
 
-桌面版入口由 Electron 主进程加载本地服务。`npm run build:win` 会生成 Windows NSIS 安装包，产物位于 `dist/`。
+产物位于 `dist/Mineradio+-*-Setup.exe`。
 
-## 更新机制
+桌面版入口由 Electron 主进程加载本地服务。
 
-Mineradio+ 会请求 GitHub Releases latest 检测新版本。远端版本高于本地版本时，应用内更新入口会展示 Release 内容、下载安装包到本机用户数据目录，并通过系统打开安装包。
+## 已知问题
 
-本地验证更新链路时，可以通过 `MINERADIO_UPDATE_MANIFEST` 指向一个本地 manifest JSON 或 HTTP 地址来模拟线上 Release。
+- 热评卡片单层纹理壁纸已支持，多层纹理暂不可用
+- 播放器壁纸首次加载有 1-3 秒延迟（原版行为）
+- 酷狗音乐登录依赖 kugou.com Cookie 解析，酷狗网站改版后可能失效。网易云/QQ 同理，均为第三方网站 Cookie 方案
 
-## 第三方音乐平台说明
+## 版权说明
 
-Mineradio+ 不是网易云音乐、QQ 音乐或腾讯音乐娱乐集团的官方客户端，也不隶属于任何音乐平台。
-
-项目中的第三方平台接入仅用于个人学习、本地客户端体验和用户自有账号的播放辅助。请遵守对应平台的用户协议、版权规则和会员权益规则。项目不会提供绕过付费、绕过会员、破解音质或重新分发音乐内容的能力。
-
-## 用户数据与隐私
-
-登录 Cookie、搜索历史、自定义封面、自定义歌词、节奏分析缓存等数据只应保存在本机用户数据目录或浏览器本地存储中，不应提交到仓库。
-
-更多说明见 [PRIVACY.md](./PRIVACY.md)。
+- 本项目基于 [Mineradio](https://github.com/XxHuberrr/Mineradio)（GPL-3.0）修改
+- 修改内容：热评卡片壁纸视频导入、PKG 解包提取、年龄分级筛选、托盘功能增强
+- PKG 解包使用 [RePKG](https://github.com/NotScuffed/RePKG)（MIT）提取纹理
+- 原版作者：[XxHuberrr](https://github.com/XxHuberrr)
+- MR Logo、Mineradio 名称、界面视觉设计与原创视觉表达归原版作者所有
+- 本修改版遵循 **GPL-3.0** 协议开源
+- 第三方依赖和第三方服务分别遵循其各自授权与服务条款
 
 ## 致谢
 
-Mineradio+ 基于 [XxHuberrr/Mineradio](https://github.com/XxHuberrr/Mineradio) v2.0.2 修改。感谢 XxHuberrr 的主要设计与打造。
+感谢 [XxHuberrr](https://github.com/XxHuberrr) 创造了 Mineradio 这样一个优秀的开源音乐播放器。
 
-同时感谢小天才e宝、应春日、锋将军、軌跡、林中、骊、风痕、花椰菜🥦在早期体验、测试反馈和发布准备中的帮助。
+感谢 [NotScuffed/RePKG](https://github.com/NotScuffed/RePKG) 提供了 Wallpaper Engine PKG 文件解包工具。
 
-## 版权与授权
+## 与原版的区别
 
-Copyright (C) 2026 VanemKrAu / XxHuberrr.
-
-本项目基于 Mineradio（XxHuberrr）修改，遵循 GPL-3.0 授权。详见 [LICENSE](./LICENSE)。
-
-MR Logo、Mineradio+ 名称、界面视觉设计与原创视觉表达归作者所有；第三方依赖和第三方服务分别遵循其各自授权与服务条款。
+| 方面 | 原版 | 本修改版 |
+|------|------|----------|
+| 应用名称 | Mineradio | Mineradio+ |
+| 版本 | v2.0.2 | v2.0.2-1 |
+| PKG 解包提取 | ❌ 无 | ✅ 集成 RePKG |
+| 热评壁纸背景 | ❌ 无 | ✅ 视频/图片导入 + 裁切 |
+| 年龄分级筛选 | ❌ 无 | ✅ 下拉筛选 + 持久化 |
+| 壁纸排序 | 默认顺序 | 收藏置顶 → 创建时间倒序 |
+| 托盘功能 | 基础 | 歌曲信息 + 播放控制 + 音量 + 开机自启 |
+| 隐藏壁纸 | ✅ 有 | ❌ 已移除 |
+| 应用 ID | com.mineradio.desktop | com.mineradio-plus.desktop |
+| 可共存安装 | ❌ | ✅ |
+| GitHub | XxHuberrr/Mineradio | VanemKrAu/Mineradio-Plus |
