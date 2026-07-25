@@ -6983,10 +6983,17 @@ const server = http.createServer(async (req, res) => {
   }
 
   function withTimeout(promise, ms) {
-    return Promise.race([
-      promise,
-      new Promise(function (_, reject) { setTimeout(function () { reject(new Error('Timeout ' + ms + 'ms')); }, ms); }),
-    ]);
+    var timer = null;
+    var timeoutPromise = new Promise(function (_, reject) {
+      timer = setTimeout(function () { reject(new Error('Timeout ' + ms + 'ms')); }, ms);
+    });
+    return Promise.race([promise, timeoutPromise]).then(function (v) {
+      clearTimeout(timer);
+      return v;
+    }).catch(function (e) {
+      clearTimeout(timer);
+      throw e;
+    });
   }
 
   function lyricBodyHasPrimary(body) {
