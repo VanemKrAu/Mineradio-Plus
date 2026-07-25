@@ -196,10 +196,8 @@ function homeDashboardReadVideoMeta() {
   try {
     var meta = JSON.parse(localStorage.getItem(HOME_DASHBOARD_VIDEO_META_KEY) || 'null');
     if (!meta) return null;
-    // Support WE wallpaper preview
     if (meta.type === 'wallpaper-engine') return meta;
-    if (meta.version !== 1 || !/\.mp4$/i.test(String(meta.name || ''))) return null;
-    if (meta.type && String(meta.type).toLowerCase() !== 'video/mp4') return null;
+    if (meta.version !== 1) return null;
     return meta;
   } catch (_error) {
     return null;
@@ -293,25 +291,38 @@ async function homeDashboardAttachVideo() {
       shouldRetry = homeDashboardVideoShouldPlay();
       return;
     }
-    var video = document.createElement('video');
-    video.className = 'home-dashboard-video';
-    video.setAttribute('aria-hidden', 'true');
-    video.muted = true;
-    video.defaultMuted = true;
-    video.loop = true;
-    video.playsInline = true;
-    video.setAttribute('playsinline', '');
-    video.preload = 'metadata';
-    video.src = objectUrl;
-    video.addEventListener('error', function () {
-      if (token !== homeDashboardVideoLoadToken || !video.getAttribute('src')) return;
-      homeDashboardVideoDecodeFailed = true;
-      homeDashboardReleaseVideoSource(true);
-      homeDashboardNotify('这个 MP4 无法解码，请换成 H.264 编码的 MP4');
-    }, { once: true });
+    var zoom = Math.max(1, Math.min(3, Number(meta.zoom) || 1));
+    var opx = Number(meta.opx), opy = Number(meta.opy);
+    if (!isFinite(opx)) opx = 50; if (!isFinite(opy)) opy = 50;
+    var isVideo = blob.type && blob.type.indexOf('video') >= 0;
+    if (isVideo) {
+      var video = document.createElement('video');
+      video.className = 'home-dashboard-video';
+      video.setAttribute('aria-hidden', 'true');
+      video.muted = true; video.defaultMuted = true; video.loop = true; video.playsInline = true;
+      video.setAttribute('playsinline', '');
+      video.preload = 'metadata';
+      video.style.transform = 'scale(' + zoom + ')';
+      video.style.transformOrigin = 'center';
+      video.style.objectPosition = opx + '% ' + opy + '%';
+      video.src = objectUrl;
+      video.addEventListener('error', function () {
+        if (token !== homeDashboardVideoLoadToken || !video.getAttribute('src')) return;
+        homeDashboardVideoDecodeFailed = true;
+        homeDashboardReleaseVideoSource(true);
+        homeDashboardNotify('这个 MP4 无法解码，请换成 H.264 编码的 MP4');
+      }, { once: true });
+      card.insertBefore(video, card.firstChild);
+      video.play().catch(function () { });
+    } else {
+      var img = document.createElement('img');
+      img.className = 'home-dashboard-video';
+      img.setAttribute('aria-hidden', 'true');
+      img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;border-radius:inherit;transform:scale(' + zoom + ');transform-origin:center;object-position:' + opx + '% ' + opy + '%';
+      img.src = objectUrl;
+      card.insertBefore(img, card.firstChild);
+    }
     homeDashboardVideoObjectUrl = objectUrl;
-    card.insertBefore(video, card.firstChild);
-    video.play().catch(function () { });
   } catch (error) {
     console.warn('[HomeDashboardVideo]', error);
     homeDashboardReleaseVideoSource(true);
@@ -1319,6 +1330,94 @@ document.addEventListener('visibilitychange', function () {
   else scheduleHomeDashboardRefresh();
   homeDashboardUpdateVideoPower();
 });
+
+// --- Crop dialog (for WE wallpaper daily review, handles both images and videos) ---
+function openHomeDashboardVideoCrop(file) {
+  if (!file) return;
+  if (file.size > 300 * 1024 * 1024) { showToast('\u6587\u4ef6\u4e0d\u80fd\u8d85\u8fc7 300 MB'); return; }
+  var isVideo = file.type && file.type.indexOf('video') >= 0;
+  var cardEl = document.querySelector('#empty-home .daily-review-card');
+  var cardRatio = 3 / 4;
+  if (cardEl) { var cr = cardEl.getBoundingClientRect(); if (cr.width > 0 && cr.height > 0) cardRatio = cr.width / cr.height; }
+  var cw = 720, ch = Math.round(720 / cardRatio);
+  if (ch < 360) { ch = 960; cw = Math.round(960 * cardRatio); }
+  var src = URL.createObjectURL(file);
+  var media = isVideo ? document.createElement('video') : new Image();
+  if (isVideo) { media.muted = true; media.loop = true; media.playsInline = true; media.preload = 'metadata'; }
+  var loadEvent = isVideo ? 'loadedmetadata' : 'load';
+  media.addEventListener(loadEvent, function onReady() {
+    closeDailyReviewCrop();
+    var nw = isVideo ? media.videoWidth : media.naturalWidth;
+    var nh = isVideo ? media.videoHeight : media.naturalHeight;
+    if (!nw || !nh) { showToast('\u89c6\u9891\u8bfb\u53d6\u5931\u8d25'); return; }
+    var mask = document.createElement('div');
+    mask.id = 'daily-review-crop-mask';
+    mask.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7);backdrop-filter:blur(8px)';
+    mask.innerHTML =
+      '<div style="background:#13161f;border-radius:20px;padding:16px;width:min(460px,90vw);max-height:90vh;display:flex;flex-direction:column;gap:10px;box-shadow:0 32px 80px rgba(0,0,0,.6)">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;flex:0 0 auto"><div><strong style="font-size:14px;color:#e8eef5">\u88c1\u5207</strong></div><button class="fx-mini-btn ghost" data-crop-close="1" style="height:30px;padding:0 10px;font-size:11px">\u5173\u95ed</button></div>' +
+        '<div style="flex:1 1 auto;min-height:0;overflow:hidden;border-radius:10px;background:#050608"><canvas id="dash-crop-canvas" style="width:100%;height:100%;cursor:grab;touch-action:none;display:block" width="' + cw + '" height="' + ch + '"></canvas></div>' +
+        '<div style="display:flex;align-items:center;gap:10px;color:#aab2c4;font-size:11px;flex:0 0 auto"><span>\u7f29\u653e</span><input id="dash-crop-zoom" type="range" min="1" max="3" step="0.01" value="1" style="flex:1;height:4px"></div>' +
+        '<div style="display:flex;justify-content:flex-end;gap:6px;flex:0 0 auto"><button class="fx-mini-btn ghost" data-crop-close="1" style="height:30px;padding:0 10px;font-size:11px">\u53d6\u6d88</button><button class="fx-mini-btn" id="dash-crop-save" style="height:30px;padding:0 10px;font-size:11px">\u4fdd\u5b58</button></div>' +
+      '</div>';
+    document.body.appendChild(mask);
+    var canvas = mask.querySelector('#dash-crop-canvas');
+    var ctx = canvas.getContext('2d');
+    var zoomEl = mask.querySelector('#dash-crop-zoom');
+    var state = { x:0, y:0, zoom:1, dragging:false, px:0, py:0, raf:0 };
+    function bounds() {
+      var base = Math.max(cw / nw, ch / nh);
+      var scale = base * state.zoom;
+      var w = nw * scale, h = nh * scale;
+      var mx = Math.max(0, (w - cw) / 2), my = Math.max(0, (h - ch) / 2);
+      state.x = Math.max(-mx, Math.min(mx, state.x));
+      state.y = Math.max(-my, Math.min(my, state.y));
+      return { w: w, h: h };
+    }
+    function draw() {
+      var b = bounds();
+      ctx.fillStyle = '#050608'; ctx.fillRect(0, 0, cw, ch);
+      try { ctx.drawImage(media, (cw - b.w) / 2 + state.x, (ch - b.h) / 2 + state.y, b.w, b.h); } catch(e) {}
+      state.raf = requestAnimationFrame(draw);
+    }
+    zoomEl.addEventListener('input', function(){ state.zoom = Number(zoomEl.value) || 1; });
+    canvas.addEventListener('pointerdown', function(e){ state.dragging = true; state.px = e.clientX; state.py = e.clientY; canvas.classList.add('dragging'); canvas.setPointerCapture(e.pointerId); });
+    canvas.addEventListener('pointermove', function(e) {
+      if (!state.dragging) return;
+      var ratio = cw / Math.max(1, canvas.getBoundingClientRect().width);
+      state.x += (e.clientX - state.px) * ratio; state.y += (e.clientY - state.py) * ratio;
+      state.px = e.clientX; state.py = e.clientY;
+    });
+    function stopDrag() { state.dragging = false; canvas.classList.remove('dragging'); }
+    canvas.addEventListener('pointerup', stopDrag); canvas.addEventListener('pointercancel', stopDrag);
+    function closeCrop() { cancelAnimationFrame(state.raf); if (isVideo) media.pause(); URL.revokeObjectURL(src); mask.remove(); }
+    mask.addEventListener('click', function(e) { if (e.target === mask || e.target.closest('[data-crop-close]')) closeCrop(); });
+    mask.querySelector('#dash-crop-save').addEventListener('click', async function() {
+      try {
+        var b = bounds();
+        var ox = Math.max(0, b.w - cw), oy = Math.max(0, b.h - ch);
+        var opx = ox > 0 ? 50 - (state.x / ox) * 100 : 50;
+        var opy = oy > 0 ? 50 - (state.y / oy) * 100 : 50;
+        await homeDashboardPutVideoBlob(file, { kind:'daily-review', name:file.name, type:file.type, size:file.size });
+        var meta = { version: 1, zoom:state.zoom, opx:opx, opy:opy, name:file.name, type:file.type, naturalW:nw, naturalH:nh };
+        localStorage.setItem(HOME_DASHBOARD_VIDEO_META_KEY, JSON.stringify(meta));
+        closeCrop();
+        homeDashboardVideoObjectUrl = '';
+        if (typeof renderHomeDashboardHero === 'function') renderHomeDashboardHero();
+        showToast('\u5df2\u4fdd\u5b58');
+      } catch(e) { showToast('\u4fdd\u5b58\u5931\u8d25'); }
+    });
+    if (isVideo) { media.play().catch(function(){}); }
+    draw();
+  });
+  media.onerror = function() { URL.revokeObjectURL(src); showToast(isVideo ? '\u89c6\u9891\u8bfb\u53d6\u5931\u8d25' : '\u56fe\u7247\u8bfb\u53d6\u5931\u8d25'); };
+  if (isVideo) media.src = src;
+  else media.src = src;
+}
+function closeDailyReviewCrop() {
+  var m = document.getElementById('daily-review-crop-mask');
+  if (m) m.remove();
+}
 
 bindHomeDashboardVideoControls();
 bindHomePlatformRecommendationControls();

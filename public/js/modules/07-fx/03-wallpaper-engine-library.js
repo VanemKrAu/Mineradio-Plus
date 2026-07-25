@@ -215,7 +215,8 @@ function normalizeWallpaperEngineProject(item) {
     audioPropertyCount: Math.max(0, Math.min(256, Number(item.audioPropertyCount) || 0)),
     mutedAudioPropertyCount: Math.max(0, Math.min(256, Number(item.mutedAudioPropertyCount) || 0)),
     updatedAt: Math.max(0, Number(item.updatedAt) || 0),
-    safetyMode: item.safetyMode === 'native-engine' ? 'native-engine' : (item.safetyMode === 'direct-media' ? 'direct-media' : 'preview-only')
+    safetyMode: item.safetyMode === 'native-engine' ? 'native-engine' : (item.safetyMode === 'direct-media' ? 'direct-media' : 'preview-only'),
+    contentRating: ['Everyone','Questionable','Mature'].indexOf(item.contentRating) >= 0 ? item.contentRating : 'Everyone'
   };
 }
 
@@ -1590,6 +1591,62 @@ function applyWallpaperEngineBackground(item, quiet) {
   return true;
 }
 
+function dataUrlToFile(dataUrl, name, mime) {
+  return fetch(dataUrl).then(function(r){ return r.blob(); }).then(function(blob){
+    return new File([blob], name || 'wallpaper.mp4', { type: mime || 'video/mp4' });
+  });
+}
+
+function extractWePkgForDailyReview(item) {
+  if (!item) return;
+  var api = wallpaperEngineDesktopApi();
+  if (!api || typeof api.getWallpaperEngineProjectDetails !== 'function') { showToast('API 不可用'); return; }
+  showToast('正在提取壁纸...');
+  api.getWallpaperEngineProjectDetails(item.id).then(function(details) {
+    console.log('[PKG] details:', JSON.stringify(details));
+    if (!details || !details.ok || !details.folderPath) { showToast('无法获取项目路径'); return; }
+    var folderPath = details.folderPath;
+    if (typeof api.extractWallpaperScene === 'function') {
+      api.extractWallpaperScene(folderPath).then(function(sr) {
+        console.log('[PKG] extract result:', JSON.stringify({ ok: sr.ok, videos: sr.videos ? sr.videos.length : 0, layers: sr.layers ? sr.layers.length : 0, error: sr.error, cacheDir: sr.cacheDir }));
+        if (sr && sr.ok && sr.videos && sr.videos.length) {
+          var videoPath = sr.videos[0].path;
+          api.readWallpaperFile(videoPath).then(function(vr) {
+            if (vr && vr.ok && vr.dataUrl) {
+              fetch(vr.dataUrl).then(function(r){ return r.blob(); }).then(function(blob){
+                var file = new File([blob], 'wallpaper.mp4', { type: 'video/mp4' });
+                if (typeof openHomeDashboardVideoCrop === 'function') openHomeDashboardVideoCrop(file);
+                else showToast('壁纸已加载');
+              }).catch(function(){ showToast('视频加载失败'); });
+            } else { showToast('视频读取失败: ' + (vr && vr.error || '')); }
+          }).catch(function(){ showToast('视频读取失败'); });
+          return;
+        }
+        if (sr && sr.ok && sr.layers) {
+          if (sr.layers.length > 1) { showToast('多层纹理壁纸暂不支持'); return; }
+          if (sr.layers.length === 1 && sr.cacheDir) {
+            var imgFile = sr.layers[0].imageFile || sr.layers[0].videoFile || '';
+            if (imgFile) {
+              var layerPath = (sr.cacheDir + '/' + imgFile).replace(/\\/g, '/');
+              api.readWallpaperFile(layerPath).then(function(lr) {
+                if (lr && lr.ok && lr.dataUrl) {
+                  fetch(lr.dataUrl).then(function(r){ if (!r.ok) throw new Error(); return r.blob(); }).then(function(blob){
+                    var file = new File([blob], 'wallpaper.jpg', { type: 'image/jpeg' });
+                    if (typeof openHomeDashboardVideoCrop === 'function') openHomeDashboardVideoCrop(file);
+                    else showToast('壁纸已加载');
+                  }).catch(function(){ showToast('图片加载失败'); });
+                } else { showToast('图片读取失败: ' + (lr && lr.error || '')); }
+              }).catch(function(){ showToast('图片读取失败'); });
+              return;
+            }
+          }
+        }
+        showToast(sr && sr.error ? '解包失败: ' + sr.error : '无法提取该壁纸');
+      }).catch(function(){ showToast('解包失败'); });
+    } else { showToast('解包功能不可用'); }
+  }).catch(function(){ showToast('项目详情获取失败'); });
+}
+
 function openWeForDailyReviewVideo() {
   wpWePickerMode = 'daily-review-video';
   openWallpaperEngineLibrary();
@@ -1604,31 +1661,22 @@ function activateWallpaperEngineItem(id) {
   if (wpWePickerMode === 'daily-review-video') {
     wpWePickerMode = 'apply';
     closeWallpaperEngineLibrary();
-    // Use preview as hero background
-    if (item.hasPreview) {
-      var previewUrl = wallpaperEngineMediaUrl(item, 'preview');
-      // Store as hero video meta so the dashboard picks it up
-      try {
-        var meta = { type: 'wallpaper-engine', projectId: item.id, title: item.title, previewUrl: previewUrl, updatedAt: Date.now() };
-        localStorage.setItem(HOME_DASHBOARD_VIDEO_META_KEY, JSON.stringify(meta));
-      } catch (_e) {}
-      if (typeof clearHomeDashboardVideo === 'function') clearHomeDashboardVideo();
-      // Apply as wallpaper too for full effect
-      wallpaperEngineSelection = normalizeWallpaperEngineSelection({
-        active: true, id: item.id, title: item.title,
-        kind: item.enginePlayable ? 'engine' : (item.playable ? 'media' : 'preview'),
-        mediaType: item.enginePlayable ? 'video' : (item.playable ? item.mediaType : 'image'),
-        mediaAnimated: item.mediaAnimated, projectType: item.projectType,
-        hasPreview: item.hasPreview, previewAnimated: item.previewAnimated, updatedAt: item.updatedAt
+    // PKG wallpapers: use PKG extraction
+    if (item.enginePlayable) { extractWePkgForDailyReview(item); return; }
+    // Non-PKG wallpapers: try direct media file
+    var mediaUrl = (item.playable && item.mediaType) ? wallpaperEngineMediaUrl(item, 'media') : (item.hasPreview ? wallpaperEngineMediaUrl(item, 'preview') : '');
+    if (!mediaUrl) { showToast('该项目没有可用媒体'); return; }
+    showToast('正在加载壁纸...');
+    fetch(mediaUrl).then(function(r) {
+      if (!r.ok) throw new Error();
+      var ct = r.headers.get('Content-Type') || 'image/jpeg';
+      return r.blob().then(function(blob) {
+        var ext = ct.indexOf('video') >= 0 ? '.mp4' : '.jpg';
+        var file = new File([blob], (item.title || 'wallpaper') + ext, { type: ct });
+        if (typeof openHomeDashboardVideoCrop === 'function') openHomeDashboardVideoCrop(file);
+        else showToast('壁纸已加载');
       });
-      saveWallpaperEngineSelection();
-      wallpaperEngineRuntimeError = '';
-      applyWallpaperEngineBackground(item, false);
-      showToast('已应用壁纸到主页背景');
-      if (typeof renderHomeDashboardHero === 'function') renderHomeDashboardHero();
-    } else {
-      showToast('该项目没有可用预览');
-    }
+    }).catch(function() { showToast('壁纸加载失败'); });
     return;
   }
   wallpaperEngineSelection = normalizeWallpaperEngineSelection({
@@ -1726,7 +1774,7 @@ function handleWallpaperEngineHostBoundsChange(payload) {
 }
 
 function weRatingLabel(value) {
-  return value === 'native-engine' ? '全年龄' : (value === 'direct-media' ? '全年龄' : (value === 'preview-only' ? '可疑' : ''));
+  return ({ Everyone: '全年龄', Questionable: '可疑', Mature: '成人' })[value] || '';
 }
 
 function wallpaperEngineFilteredProjects() {
@@ -1734,28 +1782,61 @@ function wallpaperEngineFilteredProjects() {
   var query = String(search && search.value || '').trim().toLowerCase();
   var rating = wallpaperEngineRatingFilter;
   return wallpaperEngineProjects.filter(function (item) {
-    if (hiddenWallpaperEngineIds.has(item.id)) return false;
     if (rating !== 'all') {
-      var r = item.safetyMode === 'native-engine' ? 'Everyone' : (item.safetyMode === 'direct-media' ? 'Everyone' : 'Questionable');
-      if (r !== rating) return false;
+      if (!item.contentRating || item.contentRating !== rating) return false;
     }
     if (!query) return true;
     return (item.title + ' ' + item.projectType + ' ' + item.sourceLabel + ' ' + item.workshopId).toLowerCase().indexOf(query) >= 0;
   }).sort(function (a, b) {
-    var favA = favoriteWallpaperEngineIds.has(a.id) ? 1 : 0;
-    var favB = favoriteWallpaperEngineIds.has(b.id) ? 1 : 0;
+    var fa = favoriteWallpaperEngineIds.has(a.id) ? 1 : 0;
+    var fb = favoriteWallpaperEngineIds.has(b.id) ? 1 : 0;
+    if (fa !== fb) return fb - fa;
     var ua = Number(a.updatedAt) || 0, ub = Number(b.updatedAt) || 0;
-    return favB - favA || ub - ua || a.title.localeCompare(b.title, 'zh-CN');
+    if (ua !== ub) return ub - ua;
+    var ta = (a.title || '').toLowerCase(), tb = (b.title || '').toLowerCase();
+    if (ta > tb) return -1;
+    if (ta < tb) return 1;
   });
 }
 
 function setWeRatingFilter(rating) {
   wallpaperEngineRatingFilter = rating;
-  document.querySelectorAll('.wp-we-rating-btn').forEach(function(b) {
-    b.classList.toggle('active', b.getAttribute('data-we-rating') === rating);
+  try { localStorage.setItem('mineradio-we-rating-filter', rating); } catch(_e) {}
+  var label = ({ all: '全部', Everyone: '全年龄', Questionable: '可疑', Mature: '成人' })[rating] || '全部';
+  var labelEl = document.getElementById('we-rating-label');
+  if (labelEl) labelEl.textContent = label;
+  document.querySelectorAll('.we-rating-item').forEach(function(b) {
+    var isActive = b.getAttribute('data-we-rating') === rating;
+    b.classList.toggle('active', isActive);
+    b.style.background = isActive ? 'rgba(var(--fc-accent-rgb),.12)' : 'transparent';
+    b.style.color = isActive ? 'var(--fc-accent)' : 'rgba(255,255,255,.82)';
   });
+  var menu = document.getElementById('we-rating-menu');
+  if (menu) menu.style.display = 'none';
   renderWallpaperEngineLibrary();
 }
+
+// Bind rating dropdown events
+(function() {
+  var dd = document.getElementById('we-rating-dropdown');
+  var btn = document.getElementById('we-rating-dropdown-btn');
+  var menu = document.getElementById('we-rating-menu');
+  if (btn && menu) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+    });
+    menu.querySelectorAll('.we-rating-item').forEach(function(b) {
+      b.addEventListener('click', function(e) {
+        e.stopPropagation();
+        setWeRatingFilter(b.getAttribute('data-we-rating') || 'all');
+      });
+    });
+    document.addEventListener('click', function() {
+      if (menu) menu.style.display = 'none';
+    });
+  }
+})();
 
 function disconnectWallpaperEnginePreviewObserver() {
   if (wallpaperEnginePreviewObserver) wallpaperEnginePreviewObserver.disconnect();
@@ -1870,8 +1951,7 @@ function renderWallpaperEngineLibrary(preserveRenderLimit) {
       (preview ? '<img class="wallpaper-engine-card-preview" data-src="' + escHtml(preview) + '" data-animated="' + (item.previewAnimated ? '1' : '0') + '" alt="" loading="lazy" decoding="async">' : '<div class="wallpaper-engine-card-placeholder"></div>') +
       '<button class="wallpaper-engine-card-star' + (favorite ? ' active' : '') + '" type="button" data-wallpaper-action="favorite" data-wallpaper-id="' + item.id + '" title="' + (favorite ? '取消星标' : '星标并置顶') + '">' + (favorite ? '★' : '☆') + '</button>' +
       '<button class="wallpaper-engine-card-settings" type="button" data-wallpaper-action="details" data-wallpaper-id="' + item.id + '" title="读取项目设置">⚙</button>' +
-      '<button class="wallpaper-engine-card-hide" type="button" data-wallpaper-action="hide" data-wallpaper-id="' + item.id + '" title="从列表隐藏">×</button>' +
-      '<div class="wallpaper-engine-card-meta">' + escHtml(item.title) + '<small>' + escHtml(wallpaperEngineProjectLabel(item)) + ((typeof weRatingLabel === 'function' && weRatingLabel(item.safetyMode)) ? ' · ' + weRatingLabel(item.safetyMode) : '') + '</small></div>' +
+      '<div class="wallpaper-engine-card-meta">' + escHtml(item.title) + '<small>' + escHtml(wallpaperEngineProjectLabel(item)) + ((typeof weRatingLabel === 'function' && weRatingLabel(item.contentRating)) ? ' · ' + weRatingLabel(item.contentRating) : '') + '</small></div>' +
       '</article>';
   }).join('') + (visibleItems.length < items.length
     ? '<button type="button" class="wallpaper-engine-load-more" data-wallpaper-action="load-more">继续加载 ' + visibleItems.length + ' / ' + items.length + '</button>'
@@ -2108,6 +2188,21 @@ async function loadWallpaperEngineLibrary(force, showNotice) {
 }
 
 async function openWallpaperEngineLibrary() {
+  // Restore persisted rating filter and sync UI
+  try {
+    var saved = localStorage.getItem('mineradio-we-rating-filter');
+    if (saved && ['all','Everyone','Questionable','Mature'].indexOf(saved) >= 0 && saved !== wallpaperEngineRatingFilter) {
+      wallpaperEngineRatingFilter = saved;
+      var lbl = document.getElementById('we-rating-label');
+      if (lbl) lbl.textContent = ({ all:'全部', Everyone:'全年龄', Questionable:'可疑', Mature:'成人' })[saved] || '全部';
+      document.querySelectorAll('.we-rating-item').forEach(function(b) {
+        var isActive = b.getAttribute('data-we-rating') === saved;
+        b.classList.toggle('active', isActive);
+        b.style.background = isActive ? 'rgba(var(--fc-accent-rgb),.12)' : 'transparent';
+        b.style.color = isActive ? 'var(--fc-accent)' : 'rgba(255,255,255,.82)';
+      });
+    }
+  } catch(_e) {}
   var modal = document.getElementById('wallpaper-engine-modal');
   if (modal) modal.classList.add('show');
   if (!wallpaperEngineLibrarySnapshot) await loadWallpaperEngineLibrary(false, false);
@@ -2255,7 +2350,6 @@ function bindWallpaperEngineLibraryEvents() {
         var actionName = action.getAttribute('data-wallpaper-action');
         var id = action.getAttribute('data-wallpaper-id');
         if (actionName === 'favorite') toggleFavoriteWallpaperEngineItem(id);
-        else if (actionName === 'hide') hideWallpaperEngineItem(id);
         else if (actionName === 'details') showWallpaperEngineProjectDetails(id);
         else if (actionName === 'load-more') {
           wallpaperEngineRenderLimit += WALLPAPER_ENGINE_RENDER_BATCH;
