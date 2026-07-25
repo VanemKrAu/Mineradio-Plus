@@ -767,31 +767,24 @@ function syncMediaSession(song, title, artist) {
     navigator.mediaSession.playbackState = 'none';
     return;
   }
-  var album = (song.album || song.albumName || '') || '';
+  var album = (song.album || song.al || song.albumName || '') || '';
   var lyricText = (typeof stageLyrics !== 'undefined' && stageLyrics && stageLyrics.currentText) || '';
   if (lyricText) {
     lyricText = String(lyricText).replace(/\s+/g, ' ').trim().substring(0, 30);
-    album = album ? (lyricText + ' · ' + album) : lyricText;
+    album = lyricText + (album ? ' · ' + album : '');
   }
   var coverUrl = (typeof songCoverSrc === 'function') ? songCoverSrc(song, 300) : (song.cover || song.picUrl || song.albumCover || '');
   var artwork = [];
   if (coverUrl) artwork.push({ src: coverUrl, sizes: '300x300', type: 'image/jpeg' });
   try {
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: title || ' ',
-      artist: artist || ' ',
-      album: album || ' ',
+      title: title || '',
+      artist: artist || '',
+      album: album || '',
       artwork: artwork
     });
     navigator.mediaSession.playbackState = !!(audio && !audio.paused) ? 'playing' : 'paused';
-    updateMediaSessionPosition();
   } catch (_e) {}
-}
-
-function updateMediaSessionPosition() {
-  if (!audio || !navigator.mediaSession || !isFinite(audio.duration) || audio.duration <= 0) return;
-  try { navigator.mediaSession.setPositionState({ duration: audio.duration, playbackRate: 1, position: audio.currentTime || 0 }); }
-  catch (_e) {}
 }
 
 function setupMediaSession() {
