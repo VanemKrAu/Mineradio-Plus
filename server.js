@@ -6982,6 +6982,13 @@ const server = http.createServer(async (req, res) => {
     return body && body[key] && typeof body[key].lyric === 'string' ? body[key].lyric : '';
   }
 
+  function withTimeout(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise(function (_, reject) { setTimeout(function () { reject(new Error('Timeout ' + ms + 'ms')); }, ms); }),
+    ]);
+  }
+
   function lyricBodyHasPrimary(body) {
     return !!(lyricNodeText(body, 'lrc') || lyricNodeText(body, 'yrc'));
   }
@@ -7006,7 +7013,7 @@ const server = http.createServer(async (req, res) => {
       let source = 'lyric';
       try {
         if (typeof lyric_new === 'function') {
-          const nr = await lyric_new({ id, cookie: userCookie, timestamp: Date.now() });
+          const nr = await withTimeout(lyric_new({ id, cookie: userCookie, timestamp: Date.now() }), 10000);
           body = nr.body || {};
           source = 'lyric_new';
         }
@@ -7014,7 +7021,7 @@ const server = http.createServer(async (req, res) => {
         console.warn('[LyricNew]', errNew.message);
       }
       if (!lyricBodyHasPrimary(body) || !lyricBodyHasTranslation(body)) {
-        const r = await lyric({ id, cookie: userCookie, timestamp: Date.now() });
+        const r = await withTimeout(lyric({ id, cookie: userCookie, timestamp: Date.now() }), 10000);
         body = mergeLyricBodies(body, r.body || {});
         source = source === 'lyric_new' ? 'lyric_new+lyric' : 'lyric';
       }

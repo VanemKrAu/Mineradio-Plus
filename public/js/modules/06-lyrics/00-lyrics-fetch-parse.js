@@ -346,7 +346,7 @@ async function fetchLyric(songOrId, token, attempt) {
         return;
       }
     }
-    var r = await apiJson(lyricEndpointForSong(song || songOrId));
+    var r = await apiJson(lyricEndpointForSong(song || songOrId), { timeoutMs: 10000 });
     var state = applyFetchedLyricResponse(song, token, r);
     if (!state) return;
     if (!state.usableLyric && shouldRetryStartupLyricFetch(song, token, attempt)) scheduleStartupLyricFetchRetry(song, token, attempt);

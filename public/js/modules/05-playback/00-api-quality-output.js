@@ -12,6 +12,7 @@ async function apiJson(url, opts) {
   }
   try {
     var res = await fetch(url, fetchOpts);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     return res.json();
   } finally {
     if (timer) clearTimeout(timer);
